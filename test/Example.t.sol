@@ -12,10 +12,11 @@ contract ExampleTest is Test {
     Example exampleContract;
 
     function setUp() public {
-        exampleContract = Example(yulDeployer.deployContract("Example"));
+        exampleContract = Example(yulDeployer.deployContract("ERC1155_YUI"));
     }
 
     function testExample() public {
+        
         bytes memory callDataBytes = abi.encodeWithSignature("randomBytes()");
 
         (bool success, bytes memory data) = address(exampleContract).call{gas: 100000, value: 0}(callDataBytes);
