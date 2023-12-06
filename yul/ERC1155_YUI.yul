@@ -1,11 +1,16 @@
 
-// doing YUI ERC20 yui udemy course familiar with
+//  YUI ERC20 yui udemy course familiar with BASIC DONE
 
-// 1)define data structure 
-// 2)basic mint/ transfer
+// 1)define data structure  done
+
+  //     data structure  todo CHECK
+  //     mapping(uint256 id => mapping(address account => uint256)) private _balances;
+  //     mapping(address account => mapping(address operator => bool)) private _operatorApprovals;
+
+// 2)basic mint/ transfer   done 
 
 
-// update _balances    
+// update _balances     done, not check
 //         balances[id][from] = fromBalance - value;
 //         _balances[id][to] += value;
 
@@ -16,9 +21,6 @@
 // 2. when emit the event: event URI(string _value, uint256 indexed _id).
 //     mint new id?
 
-// 3. data structure 
-//     mapping(uint256 id => mapping(address account => uint256)) private _balances;
-//     mapping(address account => mapping(address operator => bool)) private _operatorApprovals;
 
 
 // 4. other functions
@@ -37,8 +39,6 @@
 //   YUI how to deal with the string
 
 
-// ? how the below code manipulate the memory???
-
 // return string 
 // This doesn't need to consider the memory? just return??
 // doing https://www.udemy.com/course/advanced-solidity-yul-and-assembly/learn/lecture/34013526#questions
@@ -53,15 +53,14 @@ object "ERC1155_YUI" {
   object "Runtime" {
 
     code {
-
-        // Dispatcher  doing
+        // Dispatcher  
 
         // TODO toAdd mint, BathchMint, should only the owner has the right calling it?
-
         // mint, batchMint for test cases ???
         switch selector() 
         case 0x731133e9 /* mint(address,uint256,uint256,bytes)*/ {
-          mint(decodeAsAddress(0),convertUintToArrayInMemory(1),convertUintToArrayInMemory(2),convertArrayToMemory(3))
+
+          mint(decodeAsAddress(0),1,2,3)
           returnTrue()
         }
         case 0xb48ab8b6 /* batchMint(address,uint256[],uint256[],bytes)*/ {
@@ -72,18 +71,18 @@ object "ERC1155_YUI" {
             // memory no data?
           // consistant ?
        
-          batchMint(decodeAsAddress(0),convertArrayToMemory(1),convertArrayToMemory(2),convertArrayToMemory(3))
+          batchMint(decodeAsAddress(0),1,2,3)
           returnTrue()
         }
         case 0xf242432a /* "safeTransferFrom(address,address,uint256,uint256,bytes)"  */ {
-          safeTransferFrom(decodeAsAddress(0), decodeAsAddress(1), convertUintToArrayInMemory(2),convertUintToArrayInMemory(3),convertArrayToMemory(4))
+          safeTransferFrom(decodeAsAddress(0), decodeAsAddress(1),2,3,4)
           returnTrue()
         }
         case 0x00fdd58e /* "balanceOf(address,uint256)" */ {
           returnUint(balanceOf(decodeAsAddress(0),decodeAsUint(1)))
         }
         case 0x2eb2c2d6 /* safeBatchTransferFrom(address,address,uint256[],uint256[],bytes)  */ {
-          safeBatchTransferFrom(decodeAsAddress(0), decodeAsAddress(1),convertArrayToMemory(2),convertArrayToMemory(3),convertArrayToMemory(4))
+          safeBatchTransferFrom(decodeAsAddress(0), decodeAsAddress(1),2,3,4)
           returnTrue()
         }
         case 0xa22cb465 /* setApprovalForAll(address,bool)*/ { // bool false:0, true:1 ???
@@ -98,46 +97,81 @@ object "ERC1155_YUI" {
             revert(0, 0)
         }
 
-        function mint(to,idsPos,valuesPos,bytesPos) {
-          //how to set address(0) in YUI 
-          // safeTransferFrom(0,to,idsPos,valuesPos)
-          update(0,to,idsPos,valuesPos)
-
+        function mint(to,idOffSet,valueOffSet,bytesOffset) {
+          updateBalance(0,to,idOffSet,valueOffSet,"SINGAL")
+          // smart contract check 
+          if gt(extcodesize(to),0) {
+            callOnERC1155Received(caller(),0,to,idOffSet,valueOffSet,bytesOffset)
+            // TODO
+            // check the return value
+          }
+          
         }
-
-        // how the array transfer during the funtion call funtion
-        function batchMint(to,idsPos,valuesPos,bytesPos) {
-          // safeBatchTransferFrom(0x00,to,idsPos,valuesPos)
-          safeBatchTransferFrom(0,to,idsPos,valuesPos,bytesPos)
-        }
-
-        function safeTransferFrom(from,to,idsPos,valuesPos,bytesPos) {
-
-          update(from,to,idsPos,valuesPos)
         
+        function batchMint(to,idsOffSet,valuesOffSet,bytesOffset) {
+          safeBatchTransferFrom(0,to,idsOffSet,valuesOffSet,bytesOffset)
         }
 
-        function safeBatchTransferFrom(from,to,idsPos,valuesPos,bytesPos) {
-
-          update(from,to,idsPos,valuesPos)
-        
+        function safeTransferFrom(from,to,idOffSet,valueOffSet,bytesOffset) {
+          updateBalance(from,to,idOffSet,valueOffSet,"SINGAL")
+          if gt(extcodesize(to),0) {
+            callOnERC1155Received(caller(),from,to,idOffSet,valueOffSet,bytesOffset)
+          }
         }
 
-        // update all values, cover singal/batch
-        // This should put in the slot access group
-        function update(from,to,idsPos,valuesPos) {
+        function safeBatchTransferFrom(from,to,idsOffSet,valuesOffSet,bytesOffset) {
+          updateBalance(from,to,idsOffSet,valuesOffSet,"BATCH")
+          if gt(extcodesize(to),0) {
+            callOnERC1155BatchReceived(caller(),from,to,idsOffSet,valuesOffSet,bytesOffset)
 
-          let ids_length := mload(idsPos)
+          }
+        }
+
+        function callOnERC1155Received(operator,from,to,idOffSet,valueOffSet,bytesOffset){
+          let mem_size := buildCalldataInMem(operator,from,idOffSet,valueOffSet,bytesOffset,"SINGAL")
+          
+          let result := call(gas(), to, 0, 0, mem_size, 0, 0)
+          returndatacopy(0, 0, returndatasize())
+          return(0,0x20)
+        }
+
+
+        function callOnERC1155BatchReceived(operator,from,to,idsOffSet,valuesOffSet,bytesOffset){
+          let mem_size := buildCalldataInMem(operator,from,idsOffSet,valuesOffSet,bytesOffset,"BATCH")
+          
+          let result := call(gas(), to, 0, 0, mem_size, 0, 0)
+          returndatacopy(0, 0, returndatasize())
+          return(0,0x20)
+            
+        }
+
+
+       function setApprovalForAll(operator,isApproved) {
+          // caller???  TODO check the caller is the owner??
+          let offset := operatorApprovalStorageOffset(caller(),operator)
+          sstore(offset, safeAdd(sload(offset), isApproved))
+
+       }
+
+       function updateBalance(from,to,idsOffSet,valuesOffset,isBatch) {
+        switch isBatch
+        case "BATCH" {
+          // TODO just as uint and address, should check the type???
+          let ids_length_pos := calldataload(add(4, mul(idsOffSet, 0x20)))
+          let ids_length := calldataload(add(4,ids_length_pos))
+      
+          let values_length_pos := calldataload(add(4, mul(valuesOffset, 0x20)))
+          let values_length := calldataload(add(4,values_length_pos))
 
           // TODO when ids length !== values length ,should get the min length
-         
+          // add(idsPos,0x20),mul(i,0x20)
           let i := 0
           for {} lt(i,ids_length) {i := add(i, 1)} {
-              // doing
-              let id := mload(add(add(idsPos,0x20),mul(i,0x20)))
-              let value := mload(add(add(valuesPos,0x20),mul(i,0x20)))
 
-              // iszero(!0) =>0 =>iszero(0)=1 
+              // 0x24 should add the 0x04(function singature)
+              let id := calldataload(add(add(ids_length_pos,0x24),mul(i,0x20)))
+              let value := calldataload(add(add(values_length_pos,0x24),mul(i,0x20)))
+
               if iszero(iszero(from)) {
                 // one decrease value, one increase value
                 // TODO check sufficient value/ overflow check
@@ -149,68 +183,187 @@ object "ERC1155_YUI" {
                 addToBalanceWithId(to,id,value)
               }
               // todo emit event
+            }
+            }  
+        case "SINGAL" { 
+          let id :=    decodeAsUint(idsOffSet)
+          let value := decodeAsUint(valuesOffset)
+          // iszero(!0) =>0 =>iszero(0)=1 
+          if iszero(iszero(from)) {
+            // one decrease value, one increase value
+            // TODO check sufficient value/ overflow check
+            deductFromBalanceWithId(from,id,value)
+          }
+
+          if iszero(iszero(to)) {
+            // todo check overflow check
+            addToBalanceWithId(to,id,value)
           }
         }
+      }
 
-       function setApprovalForAll(operator,isApproved) {
-
-        // caller???  TODO check the caller is the owner??
-        let offset := operatorApprovalStorageOffset(caller(),operator)
-        sstore(offset, safeAdd(sload(offset), isApproved))
-
-       }
-
-
-
-        /**
-        functions not in the switch, can take it as the internal funcitons
+      ///////////////////////////////////////////////////////////////////////////Memory Operation/////////////////////////////////////////////////////////////////////////
+      /**
+        Copy the corrospending params to the memory, which should obey the EVM function calldata. The data in memroy will be as the CallData when calling the to address.
         
-        */
+        Memory layout:
+        0x00->0x04        function Signature
+        0x04->0x24        opertor(caller())
+        0x24->0x44        from address
+        0x44->0xa0        ids pos(0x84+0x20)                                          ||| just store id if id is uint                         
+        0x64->value_pos   value pos(should based on the actual size of the ids )      ||| just store value if value is uint
+        0x84->bytes_pos   bytes pos(should based on the actual size of ids, values )  
+        
+        0xa0->            ids'size           
+        ....              ids'each value
 
-        // doing
-        // update functions/ check functions
-        // solve the possible conflict problem
+        value_pos->       value's size  
+        ...               values'each value
 
+        bytes_pos->       bytes's size
+        ...               values'each value
+
+
+        Params:
+        operator:     who trigger the tx
+        from:         from address
+        idsOffSet:    The idsoffset of the calldata 
+        valuesOffset: The valuesOffset of the calldata 
+        bytesOffset:  The bytesOffset of the calldata 
+        isBatch:      "BATCH"/"SINGAL" 
+      */
+
+      function buildCalldataInMem(operator,from,idsOffSet,valuesOffset,bytesOffset,isBatch) -> mem_size{
+
+        switch isBatch
+        case "BATCH" {
+
+          datacopy(0, dataoffset("onERC1155BatchReceived"), datasize("onERC1155BatchReceived"))
+          let functionSignature := keccak256(0, datasize("onERC1155BatchReceived"))
+          mstore(0,functionSignature) 
+          mstore(0x44,0xa0)  // ids pos in memory 
+
+          let ids_length_pos,ids_size := CopyArrayToMemory(0xa4,idsOffSet) 
+          mstore(0x64,add(0xa0,ids_size)) // values pos in memory
+
+          let values_length_pos,values_size := CopyArrayToMemory(add(0xa4,ids_size),valuesOffset) 
+          mstore(0x84,add(0xa0,add(ids_size,values_size))) // bytes pos in memory
+        
+          let bytes_size := copyBytesToMemory(add(0xa4,add(ids_size,values_size)),bytesOffset) // copy bytes to the memory
+          mem_size := add(0xa4,add(ids_size,add(values_size,bytes_size)))
+        
+        }  
+        case "SINGAL" { 
+          datacopy(0, dataoffset("onERC1155Received"), datasize("onERC1155Received"))
+          let functionSignature := keccak256(0, datasize("onERC1155Received"))
+          mstore(0,functionSignature)
+          
+          mstore(0x44,decodeAsUint(idsOffSet))
+          mstore(0x64,decodeAsUint(valuesOffset))
+          mstore(0x84,0xa0) // bytes pos in memory
+          let add_size := copyBytesToMemory(0xa4,bytesOffset)
+          mem_size := add(0xa4,add_size)
+          
+        }
+        
+        // same parameter
+        mstore(4,operator)
+        mstore(0x24,from)
+
+      }
+
+      /**
+        Copy the array in calldata to the memory at the mem_pos,including the array's length and each value. 
+
+        Params:
+        mem_pos: Memory postion, which as the beginning postion store the array's data
+        offset:  The array's offset in calldata
+        
+        data_length_pos: the data's length pos in calldata
+        data_length:     the array's length(add 0x20<length>) 
+
+        More details: https://github.com/sodexx7/yui_erc1155/blob/main/MemoryExplain.md#L70
+
+      */
+      function CopyArrayToMemory(mem_pos,offset) -> data_length_pos,data_length {
+        data_length_pos := calldataload(add(4, mul(offset, 0x20)))
+        data_length := calldataload(add(4,data_length_pos))
+
+        data_length := add(0x20,mul(data_length,0x20))
+        calldatacopy(mem_pos,add(4,data_length_pos),data_length)
+        
+      }
+      
+      // iszero iszero CHECK
+      /**
+        Copy the bytes in calldata to the memory at the mem_pos,including the bytes's length and its value. 
+
+        Params:
+        bytes_size_0x20: 0x40(bytes'length <=0x20) 
+                        Calculated on the formual when  bytes'length > 0x20  
+                        e.g. bytes'length = 0x40, bytes_size_0x20 = 0x60
+                             bytes'length = 0x41, bytes_size_0x20 = 0x80
+                   
+        More details: https://github.com/sodexx7/yui_erc1155/blob/main/MemoryExplain.md#L73
+      */
+      function copyBytesToMemory(mem_pos,bytesOffset) -> bytes_size_0x20 {
+        let bytes_pos := add(4, mul(bytesOffset, 0x20)) // 0x64??? calldata_pos
+        let bytes_length_pos := calldataload(bytes_pos) // 0x80  length_pos
+        let bytes_length := calldataload(add(bytes_length_pos,0x04)) 
        
 
-        // Cover batch and signal transaction
-        // ?? should use which way. for... check.. update
-
+        // Calculate the size of the bytes, which based on the 0x20
+        // iszero iszero       ||   not   bytes_length > 0x20  <=> bytes_length <= 0x20
         
+        switch iszero(iszero(gt(bytes_length,0x20)))
+          case 1 {
+                  bytes_size_0x20 := add(bytes_size_0x20,0x20) // including length
+                  
+                  // return(mem_pos,0x40)
+                
+                }  // <=0x20
+          case 0 {  // > 0x20 // This shoud CHeck TODO 
+                  bytes_size_0x20 := div(bytes_length,0x20)
 
-  
+                  if gt(mod(bytes_length,0x20),0) { bytes_size_0x20 := add(bytes_size_0x20,1) }
 
-         /* -------- storage layout ---------- */
+                  bytes_size_0x20 :=add(mul(bytes_size_0x20,0x20),0x20)
+
+                 }          
+
+        calldatacopy(mem_pos,add(bytes_length_pos,0x04),bytes_size_0x20)
+
+      }
+
+      ///////////////////////////////////////////////////////////////////////////storage layout/////////////////////////////////////////////////////////////////////////
         // should the check the implementation maybe has some conflict?
-        
-        function balancesPos() -> p { p := 0 }
-        function operatorApprovalsPos() -> p { p := 1 }
-
+        function balancesSlot() -> p { p := 0 }
+        // todo the below is not used CHECK
+        function operatorApprovalsSlot() -> p { p := 1 }
 
         // This implementation is samke like solidity how to manipulate the nested mapping keccak256(account,keccak256(id,slot)) 
         function balanceWithIdStorageOffset(id, account) -> offset {
            
            mstore(0, id)
-           mstore(0x20, balancesPos())
+           mstore(0x20, balancesSlot())
            
            mstore(0x20,keccak256(0, 0x40)) 
            mstore(0, account)
            offset := keccak256(0, 0x40)
         }
+
         function operatorApprovalStorageOffset(account, operator) -> offset {
             mstore(0, account)
             mstore(0x20, operator)
             offset := keccak256(0, 0x40)
         }
 
-      //   // Now only support singal safeTransferFrom, only singal mint 
-      //   // address from, address to, uint256[] memory ids, uint256[] memory values
-      //   /***
-      //     todo
-      //     1) batch test
-      //     2) all situations check
-      //     3) add event
-      //   ***/
+        /***
+          todo
+          1) batch test
+          2) all situations check
+          3) add event
+        ***/
        
 
         function addToBalanceWithId(account,id,amount) {
@@ -226,8 +379,7 @@ object "ERC1155_YUI" {
         }
 
 
-
-      /* -------- storage access ---------- */
+      ///////////////////////////////////////////////////////////////////////////storage access/////////////////////////////////////////////////////////////////////////
 
       function balanceOf(account,id) -> bal {
           bal := sload(balanceWithIdStorageOffset(id,account))
@@ -245,8 +397,7 @@ object "ERC1155_YUI" {
         
       }
 
-
-      /* ---------- calldata encoding functions ---------- */
+      ///////////////////////////////////////////////////////////////////////////calldata encoding functions///////////////////////////////////////////////////////////////
       //  form calldata => memory/stack =>return
       function returnUint(v) {
         mstore(0, v)
@@ -256,12 +407,12 @@ object "ERC1155_YUI" {
       function returnTrue() {
           returnUint(1)
       }
-     
+
       function selector() -> s {
         s := shr(mul(28,8),calldataload(0))
       }
 
-      // address format: 0x + "0"*20+"0"*12
+      // address format: 0x + "0"*20+"f"*12
       function decodeAsAddress(offset) -> v {
         v := decodeAsUint(offset)
         if iszero(iszero(and(v, not(0xffffffffffffffffffffffffffffffffffffffff)))) {
@@ -277,76 +428,32 @@ object "ERC1155_YUI" {
         v := calldataload(pos)
       }
 
-      /* -------- convert calldata to memory ---------- */
-      /***
-      Copy array in calldata to the memory
-      1: array in calldata: place+length_value+each value
-      2: copy array's length value following each array's value in the memory
-      3. return the position, which points to the length value's position in memory
-      ***/
-      // convert one calldata type the array in the memory, and return the start_position(length value)
-      function convertArrayToMemory(offset) -> len_position {
-        
-        // TODO copy the calldata into the memory, before copy the data into the memory, should check?
-
-        // calculate the array's  lens_pos in the calldata
-        let start_pos_loc := add(4, mul(offset, 0x20)) 
-        let len_pos := calldataload(start_pos_loc)
-        let len_pos_calldata :=  add(4,len_pos)
-
-        let size := calldataload(len_pos_calldata) 
-        len_position := msize()
-        //TODO should check the msize has some side effects?
-        calldatacopy(len_position,len_pos_calldata,mul(add(size,1),0x20))
-        
-      }
-
-      // convert the uint param in calldata to the array in memory, the aim is to keep consistant with the uint[] in memory
-      function convertUintToArrayInMemory(offset) -> len_position {
-        let v := decodeAsUint(offset)
-
-        len_position := msize()
-        mstore(len_position,0x01)
-        mstore(add(len_position,0x20),v)
-        
-      }
-
-
-
       
 
-
-        // todo, especially for the array  
-        /***
-        function balanceOf(accounts,ids) -> bal {
-            bal := sload(balanceWithIdStorageOffset(id,account))
-        }
-        **/
+      // todo, especially for the array  
+      /***
+      function balanceOf(accounts,ids) -> bal {
+          bal := sload(balanceWithIdStorageOffset(id,account))
+      }
+      **/
 
     }
 
     // data "Message" "test string test stringtest stringtest stringtest string test string test stringtest stringtest stringtest string"
+    // where data should sites?
+    data "onERC1155Received" "onERC1155Received(address,address,uint256,uint256,bytes)"
+    data "onERC1155BatchReceived" "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"
+  
   }
 
-
-  //     data structure 
-  //     mapping(uint256 id => mapping(address account => uint256)) private _balances;
-  //     mapping(address account => mapping(address operator => bool)) private _operatorApprovals;
-
-
 }
-
-
     
 // to check, store _balances use which implementation? 
 // my current implementation(_balances) is the slot value  keccak256(id,account)   
 // _operatorApprovals keccak256(account,operator)
 // there are some weekness? can conflicyt.
 
-
-
 // supportsInterface ??
-
 // todo, YUI code format
 
 /**
