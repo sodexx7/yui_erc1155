@@ -81,6 +81,10 @@ object "ERC1155_YUI" {
         case 0x00fdd58e /* "balanceOf(address,uint256)" */ {
           returnUint(balanceOf(decodeAsAddress(0),decodeAsUint(1)))
         }
+        case 0x4e1273f4 /* "balanceOfBatch(address[],uint256[])" */ {
+          // TODO check type 
+          balanceOfBatch(0,1) 
+        }
         case 0x2eb2c2d6 /* safeBatchTransferFrom(address,address,uint256[],uint256[],bytes)  */ {
           safeBatchTransferFrom(decodeAsAddress(0), decodeAsAddress(1),2,3,4)
           returnTrue()
@@ -98,14 +102,7 @@ object "ERC1155_YUI" {
         }
 
         function mint(to,idOffSet,valueOffSet,bytesOffset) {
-          updateBalance(0,to,idOffSet,valueOffSet,"SINGAL")
-          // smart contract check 
-          if gt(extcodesize(to),0) {
-            callOnERC1155Received(caller(),0,to,idOffSet,valueOffSet,bytesOffset)
-            // TODO
-            // check the return value
-          }
-          
+          safeTransferFrom(0,to,idOffSet,valueOffSet,bytesOffset)
         }
         
         function batchMint(to,idsOffSet,valuesOffSet,bytesOffset) {
@@ -113,18 +110,51 @@ object "ERC1155_YUI" {
         }
 
         function safeTransferFrom(from,to,idOffSet,valueOffSet,bytesOffset) {
+          revertIfZeroAddress(to) // TODO show customer_error
           updateBalance(from,to,idOffSet,valueOffSet,"SINGAL")
-          if gt(extcodesize(to),0) {
-            callOnERC1155Received(caller(),from,to,idOffSet,valueOffSet,bytesOffset)
+          // to is the calller itself, skip
+          if iszero(eq(caller(),to)) {
+            if gt(extcodesize(to),0) {
+              callOnERC1155Received(caller(),from,to,idOffSet,valueOffSet,bytesOffset)
+            }
           }
         }
 
         function safeBatchTransferFrom(from,to,idsOffSet,valuesOffSet,bytesOffset) {
+          revertIfZeroAddress(to) // TODO show customer_error
           updateBalance(from,to,idsOffSet,valuesOffSet,"BATCH")
-          if gt(extcodesize(to),0) {
-            callOnERC1155BatchReceived(caller(),from,to,idsOffSet,valuesOffSet,bytesOffset)
-
+          // to is the calller itself, skip
+          if iszero(eq(caller(),to)) {
+            if gt(extcodesize(to),0) {
+              callOnERC1155BatchReceived(caller(),from,to,idsOffSet,valuesOffSet,bytesOffset)
+            }
           }
+        }
+
+        // TODO, THE below funtion can extract the reuse code, that related the updataBalacnes
+        function balanceOfBatch(addressesOffset,idsOffset) {
+          // TODO just as uint and address, should check the type???
+          let addresses_length_pos := calldataload(add(4, mul(addressesOffset, 0x20)))
+          let addresses_length := calldataload(add(4,addresses_length_pos))
+      
+          let ids_length_pos := calldataload(add(4, mul(idsOffset, 0x20)))
+          let ids_length := calldataload(add(4,ids_length_pos))
+
+          // TODO , there should add message
+          revertIfArrayLenNoEqual(addresses_length,ids_length)
+        
+          let i := 0
+          for {} lt(i,addresses_length) {i := add(i, 1)} {
+              // 0x24 should add the 0x04(function singature)
+              let addr := calldataload(add(add(addresses_length_pos,0x24),mul(i,0x20)))
+              let id := calldataload(add(add(ids_length_pos,0x24),mul(i,0x20)))
+              mstore(add(0x40,mul(i,0x20)),balanceOf(addr,id))
+          }
+
+          // after store the below value, skip the confict that the used memory by  balanceWithIdStorageOffset
+          mstore(0,0x20)
+          mstore(0x20,addresses_length)
+          return(0,add(0x40,mul(addresses_length,0x20)))
         }
 
         function callOnERC1155Received(operator,from,to,idOffSet,valueOffSet,bytesOffset){
@@ -132,7 +162,21 @@ object "ERC1155_YUI" {
           
           let result := call(gas(), to, 0, 0, mem_size, 0, 0)
           returndatacopy(0, 0, returndatasize())
-          return(0,0x20)
+
+          switch result
+          case 0 { //No-implementation OnERC1155Received
+              revert(0, returndatasize())
+          }
+          default {
+            if eq(mload(0) ,hex"f23a6e61") { // //bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"
+              return(0, returndatasize())
+            }
+            revert(0, returndatasize()) // return bytes != 0xf23a6e61
+          // check return value
+          // 1: return true, if bytes ==  ERC1155TokenReceiver.onERC1155BatchReceived.selector 
+          // 2: revert No-implement ERC1155TokenReceiver
+          // 3: revert false bytes
+          }
         }
 
 
@@ -141,10 +185,22 @@ object "ERC1155_YUI" {
           
           let result := call(gas(), to, 0, 0, mem_size, 0, 0)
           returndatacopy(0, 0, returndatasize())
-          return(0,0x20)
-            
-        }
 
+          switch result
+          case 0 { //No-implementation OnERC1155BatchReceived
+              revert(0, returndatasize())
+          }
+          default {
+            if eq(mload(0) ,hex"bc197c81") { // //bytes4(keccak256("ERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"
+               return(0, returndatasize())
+            }
+            revert(0, returndatasize()) // return bytes != 0xbc197c81
+            // check return value
+            // 1: return true, if bytes ==  ERC1155TokenReceiver.onERC1155BatchReceived.selector 
+            // 2: revert No-implement ERC1155TokenReceiver
+            // 3: revert false bytes
+          }
+        }
 
        function setApprovalForAll(operator,isApproved) {
           // caller???  TODO check the caller is the owner??
@@ -162,6 +218,9 @@ object "ERC1155_YUI" {
       
           let values_length_pos := calldataload(add(4, mul(valuesOffset, 0x20)))
           let values_length := calldataload(add(4,values_length_pos))
+
+          revertIfArrayLenNoEqual(ids_length,values_length)
+
 
           // TODO when ids length !== values length ,should get the min length
           // add(idsPos,0x20),mul(i,0x20)
@@ -183,8 +242,8 @@ object "ERC1155_YUI" {
                 addToBalanceWithId(to,id,value)
               }
               // todo emit event
-            }
-            }  
+          }
+        }  
         case "SINGAL" { 
           let id :=    decodeAsUint(idsOffSet)
           let value := decodeAsUint(valuesOffset)
@@ -237,9 +296,8 @@ object "ERC1155_YUI" {
 
         switch isBatch
         case "BATCH" {
-
           datacopy(0, dataoffset("onERC1155BatchReceived"), datasize("onERC1155BatchReceived"))
-          let functionSignature := keccak256(0, datasize("onERC1155BatchReceived"))
+          let functionSignature := keccak256(0, datasize("onERC1155BatchReceived")) // 0xbc197c81
           mstore(0,functionSignature) 
           mstore(0x44,0xa0)  // ids pos in memory 
 
@@ -255,7 +313,7 @@ object "ERC1155_YUI" {
         }  
         case "SINGAL" { 
           datacopy(0, dataoffset("onERC1155Received"), datasize("onERC1155Received"))
-          let functionSignature := keccak256(0, datasize("onERC1155Received"))
+          let functionSignature := keccak256(0, datasize("onERC1155Received")) // 0xf23a6e61
           mstore(0,functionSignature)
           
           mstore(0x44,decodeAsUint(idsOffSet))
@@ -313,7 +371,7 @@ object "ERC1155_YUI" {
        
 
         // Calculate the size of the bytes, which based on the 0x20
-        // iszero iszero       ||   not   bytes_length > 0x20  <=> bytes_length <= 0x20
+        // iszero iszero       ||   not   bytes_length > 0x20  <=> bytes_length <= 0x20 iszero iszero check
         
         switch iszero(iszero(gt(bytes_length,0x20)))
           case 1 {
@@ -372,6 +430,11 @@ object "ERC1155_YUI" {
         }
 
         function deductFromBalanceWithId(account,id, amount) {
+
+          // TODO  add customer error check balance is enough
+          let addrBalance := balanceOf(account,id)
+          require(lt(amount,addrBalance))
+
           let offset := balanceWithIdStorageOffset(id,account)
           let bal := sload(offset)
           // require bal check
@@ -396,6 +459,21 @@ object "ERC1155_YUI" {
         if or(lt(r, a), lt(r, b)) { revert(0, 0) }
         
       }
+
+      function revertIfZeroAddress(addr) {
+        require(addr)
+      }
+
+      // todo add custom_error
+      function require(condition) {
+          if iszero(condition) { revert(0, 0) }
+      }
+
+      // TODO add custom_error
+      function revertIfArrayLenNoEqual(idsSize,amountsSize){
+          if iszero(eq(idsSize,amountsSize)) { revert(0, 0) }
+      }
+
 
       ///////////////////////////////////////////////////////////////////////////calldata encoding functions///////////////////////////////////////////////////////////////
       //  form calldata => memory/stack =>return
