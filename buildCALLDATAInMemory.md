@@ -19,7 +19,7 @@
 
 ### How to get the bytes's length in calldata?
 
-* Because bytes's data is tightly encode, Calculate its length based on my code formula
+* Because bytes's data is tightly encode, Calculate its length based on my code formula. Notice: when bytes is empty, no length value.
 
 * [bytes's length code implementation](https://github.com/sodexx7/yui_erc1155/blob/b30acfcb2b83749b2f6f360c39443f99eafaecbd/yul/ERC1155_YUI.yul#L326)
 
@@ -44,7 +44,7 @@
 000000000000000000000000000000000000000000000000000000000000012c			values value
 0000000000000000000000000000000000000000000000000000000000000190			values value
 00000000000000000000000000000000000000000000000000000000000001f4			values value
-000000000000000000000000000000000000000000000000000000000000000b			bytes pos           0x200                  0x0b<0x20, bytes_size_0x20 = 0x40 
+000000000000000000000000000000000000000000000000000000000000000b			bytes length        0x200                  0x0b<0x20, bytes_size_0x20 = 0x40 
 74657374696e6720313233000000000000000000000000000000000000000000			bytes value
 
 

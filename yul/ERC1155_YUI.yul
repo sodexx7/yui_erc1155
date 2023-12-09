@@ -220,6 +220,7 @@ object "ERC1155_YUI" {
           let values_length := calldataload(add(4,values_length_pos))
 
           revertIfArrayLenNoEqual(ids_length,values_length)
+          // require(ids_length) // ids_length should gt 0 TODO add custom error
 
 
           // TODO when ids length !== values length ,should get the min length
@@ -319,6 +320,7 @@ object "ERC1155_YUI" {
           mstore(0x44,decodeAsUint(idsOffSet))
           mstore(0x64,decodeAsUint(valuesOffset))
           mstore(0x84,0xa0) // bytes pos in memory
+          
           let add_size := copyBytesToMemory(0xa4,bytesOffset)
           mem_size := add(0xa4,add_size)
           
@@ -368,31 +370,27 @@ object "ERC1155_YUI" {
         let bytes_pos := add(4, mul(bytesOffset, 0x20)) // 0x64??? calldata_pos
         let bytes_length_pos := calldataload(bytes_pos) // 0x80  length_pos
         let bytes_length := calldataload(add(bytes_length_pos,0x04)) 
-       
 
         // Calculate the size of the bytes, which based on the 0x20
-        // iszero iszero       ||   not   bytes_length > 0x20  <=> bytes_length <= 0x20 iszero iszero check
-        
-        switch iszero(iszero(gt(bytes_length,0x20)))
-          case 1 {
-                  bytes_size_0x20 := add(bytes_size_0x20,0x20) // including length
-                  
-                  // return(mem_pos,0x40)
-                
-                }  // <=0x20
-          case 0 {  // > 0x20 // This shoud CHeck TODO 
+        switch gte(bytes_length,0x20)
+          case 1{ // >=0x20 
                   bytes_size_0x20 := div(bytes_length,0x20)
-
                   if gt(mod(bytes_length,0x20),0) { bytes_size_0x20 := add(bytes_size_0x20,1) }
-
                   bytes_size_0x20 :=add(mul(bytes_size_0x20,0x20),0x20)
-
-                 }          
-
-        calldatacopy(mem_pos,add(bytes_length_pos,0x04),bytes_size_0x20)
-
+                  calldatacopy(mem_pos,add(bytes_length_pos,0x04),bytes_size_0x20)
+          }
+          case 0{ // < 0x20
+                switch iszero(bytes_length)
+                  case 1 { // specifical situation: when bytes= 0x, no length store,just store 0x00
+                    mstore(mem_pos,0)
+                    bytes_size_0x20 := 0x20
+                  }
+                  case 0 { // len =0
+                    bytes_size_0x20 := 0x40 // including length
+                    calldatacopy(mem_pos,add(bytes_length_pos,0x04),bytes_size_0x20)
+                  } 
+          } 
       }
-
       ///////////////////////////////////////////////////////////////////////////storage layout/////////////////////////////////////////////////////////////////////////
         // should the check the implementation maybe has some conflict?
         function balancesSlot() -> p { p := 0 }
@@ -430,17 +428,13 @@ object "ERC1155_YUI" {
         }
 
         function deductFromBalanceWithId(account,id, amount) {
-
           // TODO  add customer error check balance is enough
-          let addrBalance := balanceOf(account,id)
-          require(lt(amount,addrBalance))
-
           let offset := balanceWithIdStorageOffset(id,account)
-          let bal := sload(offset)
+          let addrBalance := sload(offset)
+          require(lte(amount,addrBalance))
           // require bal check
-          sstore(offset, sub(bal, amount))
+          sstore(offset, sub(addrBalance, amount))
         }
-
 
       ///////////////////////////////////////////////////////////////////////////storage access/////////////////////////////////////////////////////////////////////////
 
@@ -453,6 +447,13 @@ object "ERC1155_YUI" {
       }
 
        /* ---------- utility functions ---------- */
+      function lte(a, b) -> r {
+        r := iszero(gt(a, b))
+      }
+      
+      function gte(a, b) -> r {
+          r := iszero(lt(a, b))
+      } 
       
       function safeAdd(a, b) -> r {
         r := add(a, b)
