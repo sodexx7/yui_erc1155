@@ -74,6 +74,14 @@ object "ERC1155_YUI" {
           batchMint(decodeAsAddress(0),1,2,3)
           returnTrue()
         }
+        case 0xf5298aca /* "burn(address,uint256,uint256)" */ {
+          burn(decodeAsAddress(0),1,2)
+          returnTrue()
+        }
+        case 0xf6eb127a /* "batchBurn(address,uint256[],uint256[])" */ {
+          batchBurn(decodeAsAddress(0),1,2)
+          returnTrue()
+        }
         case 0xf242432a /* "safeTransferFrom(address,address,uint256,uint256,bytes)"  */ {
           safeTransferFrom(decodeAsAddress(0), decodeAsAddress(1),2,3,4)
           returnTrue()
@@ -107,6 +115,16 @@ object "ERC1155_YUI" {
         
         function batchMint(to,idsOffSet,valuesOffSet,bytesOffset) {
           safeBatchTransferFrom(0,to,idsOffSet,valuesOffSet,bytesOffset)
+        }
+
+        function burn(from,idOffSet,valueOffSet) {
+          // TODO, should check the rights
+          updateBalance(from,0,idOffSet,valueOffSet,"SINGAL")
+        }
+        
+        function batchBurn(from,idsOffSet,valuesOffSet) {
+          // TODO, should check the rights
+          updateBalance(from,0,idsOffSet,valuesOffSet,"BATCH")
         }
 
         function safeTransferFrom(from,to,idOffSet,valueOffSet,bytesOffset) {
