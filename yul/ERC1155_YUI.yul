@@ -45,6 +45,11 @@
 
 object "ERC1155_YUI" {
   code {
+      
+    // Store the creator in slot zero.
+    sstore(0, caller())
+
+
     // deploy the contract
     datacopy(0, dataoffset("Runtime"), datasize("Runtime"))
     return(0, datasize("Runtime"))
@@ -101,9 +106,17 @@ object "ERC1155_YUI" {
           setApprovalForAll(decodeAsAddress(0),decodeAsUint(1))
           returnTrue()
         }
-        case 0xe985e9c5 /*isApprovedForAll(address,address)*/ { // bool false:0, true:1 ???
+        case 0xe985e9c5 /*isApprovedForAll(address,address)*/ { // bool false:0, true:1 
           returnUint(isApprovedForAll(decodeAsAddress(0),decodeAsAddress(1)))
         }
+        case 0x02fe5305 /*setURI(string)*/ { // CHECK when construct or the onwer call?
+          setURI(0)
+          returnTrue()
+        }
+
+        
+
+
         // no functions match, just revert
         default {
             revert(0, 0)
@@ -224,6 +237,7 @@ object "ERC1155_YUI" {
           // caller???  TODO check the caller is the owner??
           let offset := operatorApprovalStorageOffset(caller(),operator)
           sstore(offset, safeAdd(sload(offset), isApproved))
+          emitApprovalForAll(caller(),operator,isApproved)
 
        }
 
@@ -260,8 +274,8 @@ object "ERC1155_YUI" {
                 // todo check overflow check
                 addToBalanceWithId(to,id,value)
               }
-              // todo emit event
           }
+           emitTransferBatch(caller(),from,to,idsOffSet,valuesOffset)
         }  
         case "SINGAL" { 
           let id :=    decodeAsUint(idsOffSet)
@@ -277,6 +291,9 @@ object "ERC1155_YUI" {
             // todo check overflow check
             addToBalanceWithId(to,id,value)
           }
+          // Emit TransferSingle, should notice are there conflict with using memory
+          emitTransferSingle(caller(),from,to,id,value)
+         
         }
       }
 
@@ -320,10 +337,10 @@ object "ERC1155_YUI" {
           mstore(0,functionSignature) 
           mstore(0x44,0xa0)  // ids pos in memory 
 
-          let ids_length_pos,ids_size := CopyArrayToMemory(0xa4,idsOffSet) 
+          let ids_length_pos,ids_size := copyArrayToMemory(0xa4,idsOffSet) 
           mstore(0x64,add(0xa0,ids_size)) // values pos in memory
 
-          let values_length_pos,values_size := CopyArrayToMemory(add(0xa4,ids_size),valuesOffset) 
+          let values_length_pos,values_size := copyArrayToMemory(add(0xa4,ids_size),valuesOffset) 
           mstore(0x84,add(0xa0,add(ids_size,values_size))) // bytes pos in memory
         
           let bytes_size := copyBytesToMemory(add(0xa4,add(ids_size,values_size)),bytesOffset) // copy bytes to the memory
@@ -363,7 +380,7 @@ object "ERC1155_YUI" {
         More details: https://github.com/sodexx7/yui_erc1155/blob/main/MemoryExplain.md#L70
 
       */
-      function CopyArrayToMemory(mem_pos,offset) -> data_length_pos,data_length {
+      function copyArrayToMemory(mem_pos,offset) -> data_length_pos,data_length {
         data_length_pos := calldataload(add(4, mul(offset, 0x20)))
         data_length := calldataload(add(4,data_length_pos))
 
@@ -372,7 +389,6 @@ object "ERC1155_YUI" {
         
       }
       
-      // iszero iszero CHECK
       /**
         Copy the bytes in calldata to the memory at the mem_pos,including the bytes's length and its value. 
 
@@ -415,6 +431,8 @@ object "ERC1155_YUI" {
         // todo the below is not used CHECK
         function operatorApprovalsSlot() -> p { p := 1 }
 
+        function URISlot() -> p { p := 1 }
+
         // This implementation is samke like solidity how to manipulate the nested mapping keccak256(account,keccak256(id,slot)) 
         function balanceWithIdStorageOffset(id, account) -> offset {
            
@@ -452,6 +470,54 @@ object "ERC1155_YUI" {
           require(lte(amount,addrBalance))
           // require bal check
           sstore(offset, sub(addrBalance, amount))
+        }
+
+        // reference: https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html#bytes-and-string
+        function setURI(URIOffset){
+           // URISlot()
+           let URI_pos := add(4, mul(0x20, URIOffset)) 
+           let URI_length_pos := calldataload(URI_pos)
+           let URI_length := calldataload(add(4,URI_length_pos)) 
+
+          //  DOING test length and test
+           switch lte(URI_length,0x20)
+            // TODO check the length
+            case 1 { // URI_length <= 0x20
+                // compat the data
+                // actual data + URI_length in one slot 
+                let actualData := calldataload(add(URI_length_pos,0x20))
+                let leftMostActualData := shl(mul(8,sub(0x20,URI_length)),actualData)
+                // the lowest-order byte stores(31th bytes) the length 
+                sstore(URISlot(),or(leftMostActualData,URI_length)) // get the new compat data V or  00 = V 
+            }
+            case 0 { // URI_length > 0x20
+                // URISlot()  key-value: length * 2 + 1
+                // store keccak result
+                sstore(URISlot(),URI_length) // URI_length should add 1 TODO ???
+                // calculate the postion
+                mstore(0,URISlot())
+                // let stringPos := keccak256(0, 0x20) //TODO slot pos 0 or 0x000000....;0 ????
+
+                // calculate how many slots needed? last round should right most
+                let firstPos := keccak256(0, 0x20)
+                
+                let rounds := div(URI_length,0x20)
+                let i := 0
+                
+                for {} lt(i,rounds) {i := add(i, 1)} {
+                  let eachData := calldataload(add(add(URI_length_pos,0x20),mul(i,0x20)))
+                  sstore(add(mul(i,0x20),firstPos),eachData)
+                }
+                
+                let modSize := mod(URI_length,0x20)
+                if gt(modSize,0) {
+                  let lastData := calldataload(add(add(URI_length_pos,0x20),add(mul(i,rounds),0x20)))
+                  let leftMostActualData := shl(mul(8,sub(0x20,modSize)),lastData) // rightmost store
+                  sstore(add(mul(i,rounds),firstPos),leftMostActualData)
+                }
+
+            }
+
         }
 
       ///////////////////////////////////////////////////////////////////////////storage access/////////////////////////////////////////////////////////////////////////
@@ -493,7 +559,6 @@ object "ERC1155_YUI" {
           if iszero(eq(idsSize,amountsSize)) { revert(0, 0) }
       }
 
-
       ///////////////////////////////////////////////////////////////////////////calldata encoding functions///////////////////////////////////////////////////////////////
       //  form calldata => memory/stack =>return
       function returnUint(v) {
@@ -525,6 +590,66 @@ object "ERC1155_YUI" {
         v := calldataload(pos)
       }
 
+      // DOING indexed 3/2/1
+      ///////////////////////////////////////////////////////////////////////////events///////////////////////////////////////////////////////////////
+
+      // TODO, where emit the event
+      // TransferSingle(address,address,address,uint256,uint256) 0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62
+      function emitTransferSingle(operator,from,to,id,value) {
+        let signatureHash := 0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62
+        mstore(0,id)
+        mstore(0x20,value)
+        log4(0,0x40, signatureHash,operator,from,to)
+      }
+
+      /**
+      Memory layout:
+      0x00->0x20      : ids pos
+      0x20->value_pos : value pos
+      0x40->0x60      : ids len
+      
+      ....
+
+
+      value_pos       : value len 
+      
+      */
+      // TransferBatch(address,address,address,uint256[],uint256[]) 0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb
+      function emitTransferBatch(operator,from,to,idsOffSet,valuesOffset) {
+        let signatureHash := 0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb
+        
+        mstore(0,0x40) // ids pos in memory
+        let ids_length_pos,ids_size :=  copyArrayToMemory(0x40,idsOffSet)
+        mstore(0x20,add(0x40,ids_size)) // values pos in memory
+        
+        let values_length_pos,values_size := copyArrayToMemory(add(0x40,ids_size),valuesOffset) 
+        let mem_size := add(0x40,add(ids_size,values_size))
+
+        log4(0, mem_size, signatureHash,operator,from,to)
+      }
+      // ApprovalForAll(address,address,bool)   0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31
+      function emitApprovalForAll(owner,operator,isApproved) {
+        let signatureHash := 0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31
+        mstore(0,isApproved)
+        log3(0, 0x20, signatureHash,owner,operator)
+      }
+
+      // URI(string,uint256) 0x6bb7ff708619ba0610cba295a58592e0451dee2622938c8755667688daf3529b
+      // function emitURI(url,id) {
+      //   let signatureHash := 0x6bb7ff708619ba0610cba295a58592e0451dee2622938c8755667688daf3529b
+      //   // TODO set the memory for id 
+      //   datacopy(0, dataoffset("id_url"), datasize("id_url"))
+      //   log2(0, datasize("id_url"), signatureHash,id)
+      // }
+
+    // TransferSingle(address,address,address,uint256,uint256);
+
+    // TransferSingle(address indexed _operator, address indexed _from, address indexed _to, uint256 _id, uint256 _value);
+    // TransferBatch(address indexed _operator, address indexed _from, address indexed _to, uint256[] _ids, uint256[] _values);
+    // ApprovalForAll(address indexed _owner, address indexed _operator, bool _approved);
+    // URI(string _value, uint256 indexed _id);
+
+
       
 
       // todo, especially for the array  
@@ -534,12 +659,18 @@ object "ERC1155_YUI" {
       }
       **/
 
+
     }
 
     // data "Message" "test string test stringtest stringtest stringtest string test string test stringtest stringtest stringtest string"
     // where data should sites?
     data "onERC1155Received" "onERC1155Received(address,address,uint256,uint256,bytes)"
     data "onERC1155BatchReceived" "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"
+
+    data "URI_LESS_32BYTES" "https://cdn-domain/{id}.json"
+    data "URI_GREATER_32BYTES" "https://token-cdn-domain/{id}.json"
+
+    
   
   }
 
