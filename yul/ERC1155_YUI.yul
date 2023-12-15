@@ -1,38 +1,11 @@
 
 //  YUI ERC20 yui udemy course familiar with BASIC DONE
 
-// 1)define data structure  done
-
-  //     data structure  todo CHECK
-  //     mapping(uint256 id => mapping(address account => uint256)) private _balances;
-  //     mapping(address account => mapping(address operator => bool)) private _operatorApprovals;
-
-// 2)basic mint/ transfer   done 
-
-
-// update _balances     done, not check
-//         balances[id][from] = fromBalance - value;
-//         _balances[id][to] += value;
-
-
 // 1. Constructor
 //     set the _setURI, my implementation, here 
 
 // 2. when emit the event: event URI(string _value, uint256 indexed _id).
 //     mint new id?
-
-
-
-// 4. other functions
-
-//     Autoher check
-//     safeTransferFrom when from =0x00 . mint , to =0x00 burn
-//     safeBatchTransferFrom
-
-//     update the data structure
-
-
-//     update. based on the array. 
 
 
 // 5.reference
@@ -113,10 +86,10 @@ object "ERC1155_YUI" {
           setURI(0)
           returnTrue()
         }
-
-        
-
-
+        case 0x7754305c /*getURI()*/ { 
+          getURI()
+          returnTrue()
+        }
         // no functions match, just revert
         default {
             revert(0, 0)
@@ -276,6 +249,7 @@ object "ERC1155_YUI" {
               }
           }
            emitTransferBatch(caller(),from,to,idsOffSet,valuesOffset)
+           emitURI(URISlot(),decodeAsUint(idsOffSet))
         }  
         case "SINGAL" { 
           let id :=    decodeAsUint(idsOffSet)
@@ -431,7 +405,7 @@ object "ERC1155_YUI" {
         // todo the below is not used CHECK
         function operatorApprovalsSlot() -> p { p := 1 }
 
-        function URISlot() -> p { p := 1 }
+        function URISlot() -> p { p := 2 }
 
         // This implementation is samke like solidity how to manipulate the nested mapping keccak256(account,keccak256(id,slot)) 
         function balanceWithIdStorageOffset(id, account) -> offset {
@@ -472,53 +446,108 @@ object "ERC1155_YUI" {
           sstore(offset, sub(addrBalance, amount))
         }
 
-        // reference: https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html#bytes-and-string
+        // reference: https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html#bytes-and-string length means bytes
         function setURI(URIOffset){
            // URISlot()
            let URI_pos := add(4, mul(0x20, URIOffset)) 
            let URI_length_pos := calldataload(URI_pos)
            let URI_length := calldataload(add(4,URI_length_pos)) 
 
-          //  DOING test length and test
-           switch lte(URI_length,0x20)
+          //  DOING check the edge length
+           switch lt(URI_length,0x20) 
             // TODO check the length
-            case 1 { // URI_length <= 0x20
+            case 1 { // URI_length < 0x20 
                 // compat the data
                 // actual data + URI_length in one slot 
-                let actualData := calldataload(add(URI_length_pos,0x20))
-                let leftMostActualData := shl(mul(8,sub(0x20,URI_length)),actualData)
+                let actualData := calldataload(add(URI_length_pos,0x24))
                 // the lowest-order byte stores(31th bytes) the length 
-                sstore(URISlot(),or(leftMostActualData,URI_length)) // get the new compat data V or  00 = V 
+                sstore(URISlot(),or(actualData,mul(URI_length,2))) // get the new compat data V or  00 = V 
             }
-            case 0 { // URI_length > 0x20
+            case 0 { // URI_length >= 0x20
                 // URISlot()  key-value: length * 2 + 1
                 // store keccak result
-                sstore(URISlot(),URI_length) // URI_length should add 1 TODO ???
+                sstore(URISlot(),add(mul(URI_length,2),1)) // according to evm how to store string, when length>31bytes
                 // calculate the postion
                 mstore(0,URISlot())
-                // let stringPos := keccak256(0, 0x20) //TODO slot pos 0 or 0x000000....;0 ????
-
+                let firstPos := keccak256(0, 0x20) 
                 // calculate how many slots needed? last round should right most
-                let firstPos := keccak256(0, 0x20)
-                
                 let rounds := div(URI_length,0x20)
                 let i := 0
                 
                 for {} lt(i,rounds) {i := add(i, 1)} {
-                  let eachData := calldataload(add(add(URI_length_pos,0x20),mul(i,0x20)))
-                  sstore(add(mul(i,0x20),firstPos),eachData)
+                  
+                  let eachData := calldataload(add(add(URI_length_pos,0x24),mul(i,0x20)))
+
+                  sstore(add(firstPos,mul(i,1)),eachData)
                 }
                 
                 let modSize := mod(URI_length,0x20)
                 if gt(modSize,0) {
-                  let lastData := calldataload(add(add(URI_length_pos,0x20),add(mul(i,rounds),0x20)))
-                  let leftMostActualData := shl(mul(8,sub(0x20,modSize)),lastData) // rightmost store
-                  sstore(add(mul(i,rounds),firstPos),leftMostActualData)
+                  let lastData := calldataload(add(add(URI_length_pos,0x24),mul(rounds,0x20)))
+                  sstore(add(firstPos,rounds),lastData)
                 }
+            }
+        }
+
+        function getURI(){
+          let urlData := sload(URISlot())
+          // get the last bytes value.  judge by the low the doc indtroduce or by the length
+          // current by the length value
+
+          // get the length
+          let length := and(urlData,0x00000000000000000000000000000000000000000000000000000000000000ff)
+
+          // VV or 0 == VV
+          // VV or 1 
+          
+          // This point should write to the md.file
+          // 31bytes * 2 = 0x3e 
+          // when the length<=21 bytes, as length <= 31bytes * 2 = 0x3e
+          switch lte(length,0x3e)
+            case 1 {
+              mstore(0,0x0000000000000000000000000000000000000000000000000000000000000020)
+              mstore(0x20,div(length,2)) // extract url from slot, the length should div 2.
+              // mstore(0x40,and(urlData,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00)) // get the actual data
+              // return(0,0x60)
+
+              // TEST get the url except the {id}.json  https://abcdn-domain/ {id}.json
+              //  length  7bytes   {id}.json 8bytes  /// {id}.json 9bytes
+
+              // len:30bytes, suffix:9bytes. 21bytes
+              mstore(0x20,0x15) 
+              // let testData := shr(mul(11,8),urlData)
+              mstore(0x40,urlData)
+              return(0,0x60)
+
+              // Actual len:  sub tail 9 bytes.
+
 
             }
+            case 0 { // length > 31bytes * 2
 
-        }
+              mstore(0,URISlot())
+              let firstPos := keccak256(0, 0x20) 
+
+              mstore(0,0x0000000000000000000000000000000000000000000000000000000000000020)
+              let actualLen := div(sub(length,1),2)
+              mstore(0x20,actualLen)
+              
+              let rounds := div(actualLen,0x20)
+              let i := 0 
+              for {} lt(i,rounds) {i := add(i, 1)} {
+                mstore(add(0x40,mul(i,0x20)),sload(add(firstPos,i)))  
+              }
+              let memSize := add(0x40,mul(0x20,rounds))
+
+              let modSize := mod(actualLen,0x20)
+              if gt(modSize,0) {
+                mstore(mul(i,0x20),sload(add(firstPos,rounds)))
+                memSize := add(memSize,0x20)
+              }
+              return(0,memSize)
+            }
+
+      }
 
       ///////////////////////////////////////////////////////////////////////////storage access/////////////////////////////////////////////////////////////////////////
 
@@ -634,13 +663,200 @@ object "ERC1155_YUI" {
         log3(0, 0x20, signatureHash,owner,operator)
       }
 
+      //  https://eips.ethereum.org/EIPS/eip-1155#metadata
+
       // URI(string,uint256) 0x6bb7ff708619ba0610cba295a58592e0451dee2622938c8755667688daf3529b
-      // function emitURI(url,id) {
-      //   let signatureHash := 0x6bb7ff708619ba0610cba295a58592e0451dee2622938c8755667688daf3529b
-      //   // TODO set the memory for id 
-      //   datacopy(0, dataoffset("id_url"), datasize("id_url"))
-      //   log2(0, datasize("id_url"), signatureHash,id)
-      // }
+
+      // reference: https://docs.soliditylang.org/en/latest/yul.html#literals  literals shows
+
+      //DOING refactor the funcitons
+      function emitURI(URISlotVal,id) {
+        //  dealing url in memory, sub tail 9 bytes
+        let urlData := sload(URISlotVal)
+        let length := and(urlData,0x00000000000000000000000000000000000000000000000000000000000000ff)
+
+        switch lte(length,0x3e)
+          case 1 {
+
+            mstore(0,0x0000000000000000000000000000000000000000000000000000000000000020)
+
+            let urlActualData :=  and(urlData,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00)
+            
+            let prefixURIlen := sub(div(length,2),SUFFIXURILEN())
+
+            let prefixURIData := getDataByRange(urlActualData,0,prefixURIlen)
+
+            let suffixURIData := getDataByRange(urlActualData,add(prefixURIlen,4),sub(SUFFIXURILEN(),4)) // suffix should truncate {id}, whose length = 4
+
+            mstore(0x20,add(prefixURIlen,0x45)) //length of prefixURI+id(hex)+suffixURI
+
+            // store prefixURIData,id(hex),suffixURIData in memory
+            mstore(0x40,prefixURIData)
+
+            let idStartPos := add(0x40,prefixURIlen)
+            let idEndPos := add(idStartPos,0x40)
+            let leftPos := hexOfNumToMem(id,sub(idEndPos,1)) // 
+            // fill "o" between idStartPos and lastPos
+            fullHexOfZeroInMem(leftPos,idStartPos)
+
+            mstore(idEndPos,suffixURIData) 
+
+            return(0,add(idEndPos,sub(SUFFIXURILEN(),4)))
+          }
+          case 0 { // length > 31bytes * 2
+
+            mstore(0,URISlotVal)
+            let firstPos := keccak256(0, 0x20) 
+
+            mstore(0,0x0000000000000000000000000000000000000000000000000000000000000020)
+            
+            let prefixURIlen := sub(div(sub(length,1),2),SUFFIXURILEN())
+
+            mstore(0x20,add(prefixURIlen,0x45)) //length of prefixURI+id(hex)+suffixURI
+
+            // mstore from 0x40 until the prefixURI ends
+            let rounds := div(prefixURIlen,0x20)
+            let i := 0 
+            for {} lt(i,rounds) {i := add(i, 1)} {
+              mstore(add(0x40,mul(i,0x20)),sload(add(firstPos,i)))  
+            }
+
+            let modSize := mod(prefixURIlen,0x20)
+            if gt(modSize,0) {
+              mstore(add(0x40,mul(i,0x20)),sload(add(firstPos,rounds)))
+            }
+
+            let idStartPos := add(0x40,prefixURIlen)
+            let idEndPos := add(idStartPos,0x40)
+            
+            // mstore id(hex),suffixURIData in memory
+            let leftPos := hexOfNumToMem(id,sub(idEndPos,1)) // 
+            // fill "o" between idStartPos and lastPos
+            fullHexOfZeroInMem(leftPos,idStartPos)
+
+            //  get the last 5 bytes.
+            mstore(idEndPos,".json") 
+            
+            
+            return(0,add(idEndPos,sub(SUFFIXURILEN(),4)))
+            
+          }
+      }
+  
+    ///////////////////////////////////////////////////////////////////////////URI operation///////////////////////////////////////////////////////////////
+    
+    // The common URI suffix is .json
+    // The common URI suffix with id is {id}.json
+    // 
+    function SUFFIXURILEN() -> r {
+      r := 9 // {id}.json 9 bytes
+    }
+   
+    // the num between (0,9) or [a,f]
+    // the blew code should optimize
+    function getActualHex(num) ->r {
+
+      let startHex := 0x30 // 0x30 --->0x39  0->9
+      let startHex2 := 0x61 // 0x61 --->0x66  a->f 10-15
+
+      if lte(num,9) { r := add(startHex,num) }
+
+      if gt(num,9) { r := add(startHex2,sub(num,10)) }
+
+    }
+
+    // pos 0x59  
+    //  000000000000000000000000000000000000000000000000000000000004cce0
+
+    // 64 char
+    // 1 char 2hex
+    // HexOfZero
+    function fullHexOfZeroInMem(startPos,endPos) {
+      
+      for {} gte(startPos,endPos) {startPos := sub(startPos,1)} {
+            mstore8(startPos,getActualHex(0))
+      }
+    }
+
+    // Using the recrusive method, has some bad effects?
+    // Using for TODO ???
+    // pos test??? pos start 0x40
+
+    // curretnly directly store the the realted asii, one ascii represent 8 bytes
+
+    // reference : https://www.asciitable.com/
+    // two different implementaitons TODO compare
+    // DOING ALL 000000000(64) + string
+
+    // Store num's bytes literal in memory at the pos,
+    // hexOfNumToMem
+    function hexOfNumToMem(id,pos)->actualPos{
+
+      let divRes := div(id,16)
+      let modRes := mod(id,16)
+      mstore8(pos,getActualHex(modRes))
+      pos := sub(pos,1)
+      actualPos := pos
+
+      if lt(divRes,16){
+      if gt(divRes,0) {
+        mstore8(pos,getActualHex(divRes))
+        pos := sub(pos,1)
+      }
+      actualPos := pos
+      }
+      
+      if gte(divRes,16) {actualPos := hexOfNumToMem(divRes,pos)}
+    
+    }
+
+  
+  function calculateSize(id) ->size {
+
+    size := 0
+    for{} gt(id,16) {id := div(id,16)} {
+        size := add(size,1)
+    }
+
+    if gt(id,0) { size := add(size,1)}
+  }
+
+  // 0x7b69647d2e6a736f6e0000000000000000000000000000000000000000000000
+  // 0x1111111111111111110000000000000000000000000000000000000000000000
+  //  TODO more explain show the logic
+  function getDataByRange(value,startPos,len)->res {
+
+    if gt(startPos,0) {
+        value := shl(mul(startPos,8),value)
+    }
+
+    // first step, left shift the value. make the startPos as the 0x0
+    let markValue := sub(exp(0x100,len),1)
+    let leftMostMakrValue := shl(mul(8,sub(0x20,len)),markValue)
+    res := and(value,leftMostMakrValue)
+
+} 
+    
+
+  // convert num to hex 
+  function asciiConvert(original) -> r {
+
+      let startVal := 0x30
+      let result := sub(original,startVal)
+      switch lte(result,9)
+          case 1 {
+              r := add(startVal,result)
+          }
+          case 0 {
+            let secVal := 0x61
+            result := sub(original,secVal)
+            if lte(result,6){
+              r := add(secVal,result)
+            }
+        }
+  }
+
+  
 
     // TransferSingle(address,address,address,uint256,uint256);
 
@@ -670,7 +886,6 @@ object "ERC1155_YUI" {
     data "URI_LESS_32BYTES" "https://cdn-domain/{id}.json"
     data "URI_GREATER_32BYTES" "https://token-cdn-domain/{id}.json"
 
-    
   
   }
 

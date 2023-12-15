@@ -6,6 +6,9 @@ import "forge-std/Test.sol";
 import "./lib/YulDeployer.sol";
 import "./tokens/ERC1155TokenReceiver.sol";
 
+
+
+
 // todo basic funtions 
 interface ERC1155_YUI {
 
@@ -37,7 +40,8 @@ interface ERC1155_YUI {
     */
 
     
-    function setURI(string calldata URI) external;
+    function setURI(string memory URI) external;
+    function getURI() external returns(string memory);
 }
 
 // different situations involved with ERC1155TokenReceiver  Normal/Revert/WrongReturnData/NonERC1155Recipient
@@ -143,6 +147,7 @@ contract WrongReturnDataERC1155Recipient is ERC1155TokenReceiver {
 
 contract NonERC1155Recipient {}
 
+
 //  All test cases
 contract ERC1155_YUITest is DSTestPlus {
 
@@ -159,9 +164,140 @@ contract ERC1155_YUITest is DSTestPlus {
         token = ERC1155_YUI(yulDeployer.deployContract("ERC1155_YUI"));
     }
 
-    function testSetURI() public {
-        token.setURI("https://cdn-domain/{id}.json");
+    // DOING  test Decimal into hex
+    event URI(string _value, uint256 indexed _id);
+
+    function testEmitURI() public {
+         // when len(URI) <0x20
+        // string memory url = "https://cdn-domain/{id}.json"; // <0x20
+        // string memory url = "https://abcdn-domain/{id}.json"; // >=0x20 30bytes
+        // // string memory url = "https://aabcdn-domain/{id}.json"; // >=0x20 31bytes  take  1hex as 1 bytes
+        // string memory url = "https://aaabcdn-domain/{id}.json"; // >=0x20 32bytes   TODO check when 1 hex == 1 bytes??
+         string memory url = "https://aaabcdn-domain/{id}.jsonhttps://aaabcdn-domain/{id}.json"; // >=0x20 32bytes   TODO check when 1 hex == 1 bytes??
+        
+         
+        token.setURI(url); 
+
+
+        // DOING, combine id and URI in solidity
+        console.log("bytes32(uint(15))"+bytes32(uint(15)));
+
+        // console.logBytes32(bytes32(uint(15)));
+
+
+
+        // hevm.expectEmit(true,true,true,true);
+        // emit URI();
+        // token.mint(address(0xBEEF), 1337, 1, "");
+
+        // string memory URIresult = token.getURI();
+        // console.log(URIresult);
+
     }
+
+
+
+
+
+
+    // DOING by slot get url???
+    // DOING test all situaitons and compete the get url??? functions
+    // todo, URI should do regrex check
+    // id combine URI
+    function testSetURI() public {
+        // when len(URI) <0x20
+        // string memory url = "https://cdn-domain/{id}.json"; // <0x20
+        // string memory url = "https://abcdn-domain/{id}.json"; // >=0x20 30bytes
+        // string memory url = "https://aabcdn-domain/{id}.json"; // >=0x20 31bytes  take  1hex as 1 bytes
+        // string memory url = "https://aaabcdn-domain/{id}.json"; // >=0x20 32bytes   TODO check when 1 hex == 1 bytes??
+         string memory url = "https://aaabcdn-domain/{id}.jsonhttps://aaabcdn-domain/{id}.json"; // >=0x20 32bytes   TODO check when 1 hex == 1 bytes??
+        
+        uint test = bytes("{id}.json").length;
+        console.log("test",test);
+         
+         token.setURI(url); 
+        // reference: https://docs.soliditylang.org/en/latest/types.html#bytes-and-string-as-arrays
+        uint len = bytes(url).length;
+        console.log("len",len);
+        if(len < 31){
+          // when len(URI) >= 0x20
+             console.log("slot key:2");
+             console.log("slot value");
+            console.logBytes32(hevm.load(address(token),bytes32(uint(2)))); // pos slot store the length  
+        } else {
+            console.log("slot pos value");
+            console.logBytes32(hevm.load(address(token),bytes32(uint(2)))); 
+
+            uint rounds = len/32;
+            bytes32 firstPos = keccak256(abi.encode(bytes32(uint(2))));
+
+            for(uint i =0;i< rounds;i++){
+                console.log("the ",i,"th key");
+                console.logBytes32(bytes32(uint(firstPos)+i)); 
+                console.log("the ",i,"th value");
+                console.logBytes32(hevm.load(address(token),bytes32(uint(firstPos)+i))); 
+            }
+
+            uint modSize = len%32;
+            if(modSize > 0 ){
+                console.log("the ",rounds,"th key");
+                console.logBytes32(bytes32(uint(firstPos)+rounds)); 
+                console.log("the ",rounds,"th value");    
+                console.logBytes32(hevm.load(address(token),bytes32(uint(firstPos)+rounds)));             
+            }
+        }
+
+        string memory URIresult = token.getURI();
+        console.log(URIresult);
+        // assertEq(url,URIresult);        
+
+
+    }
+
+    // specifical string url how to limit the string arrange???
+    // function testSetURI(string memory url) public {
+       
+    //     token.setURI(url); 
+    //     // reference: https://docs.soliditylang.org/en/latest/types.html#bytes-and-string-as-arrays
+    //     uint len = bytes(url).length;
+    //     if(len < 31){
+    //       // when len(URI) >= 0x20
+    //          console.log("slot key:2");
+    //          console.log("slot value");
+    //         console.logBytes32(hevm.load(address(token),bytes32(uint(2)))); // pos slot store the length  
+    //     } else {
+    //         console.log("slot pos value");
+    //         console.logBytes32(hevm.load(address(token),bytes32(uint(2)))); 
+
+    //         uint rounds = len/32;
+    //         bytes32 firstPos = keccak256(abi.encode(bytes32(uint(2))));
+
+    //         for(uint i =0;i< rounds;i++){
+    //             console.log("the ",i,"th key");
+    //             console.logBytes32(bytes32(uint(firstPos)+i)); 
+    //             console.log("the ",i,"th value");
+    //             console.logBytes32(hevm.load(address(token),bytes32(uint(firstPos)+i))); 
+    //         }
+
+    //         uint modSize = len%32;
+    //         if(modSize > 0 ){
+    //             console.log("the ",rounds,"th key");
+    //             console.logBytes32(bytes32(uint(firstPos)+rounds)); 
+    //             console.log("the ",rounds,"th value");    
+    //             console.logBytes32(hevm.load(address(token),bytes32(uint(firstPos)+rounds)));             
+    //         }
+    //     }
+
+    //     string memory URIresult = token.getURI();
+    //     // console.log(URIresult);
+    //     assertEq(url,URIresult);   
+
+    // }
+
+ 
+
+
+    
     
 
     /************************************************************************* SINGLE ****************************************************************************/

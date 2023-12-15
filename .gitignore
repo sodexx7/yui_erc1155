@@ -9,3 +9,5 @@ test/CallPureContract.sol
 test/ERC1155.t.sol
 yui_erc1155.md
 20231209_temp.md
+
+test/ERC1155_YUI_URITest.sol
