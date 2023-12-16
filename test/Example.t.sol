@@ -12,7 +12,7 @@ contract ExampleTest is Test {
     Example exampleContract;
 
     function setUp() public {
-        exampleContract = Example(yulDeployer.deployContract("ERC1155_YUI"));
+        exampleContract = Example(yulDeployer.deployContract("Example"));
     }
 
     function testExample() public {
