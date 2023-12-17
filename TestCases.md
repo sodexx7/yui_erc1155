@@ -1,36 +1,74 @@
 # TEST_LIST
 
-**CHECK CRITERIAS (each test case will fall in one of four types)**
+## Transfer Test Cases
 
-1.  Contract types(EOA VS  Smart Contract)
-2.  Single vs Batch
+* For the transfer/mint function, each test case will fall in one of the below criterias(4 different situations)
+
+1.  Single vs Batch
+2.  (onERC1155Received check)
 
 
-| (onERC1155Received check) | Single | Batch |
-| --------------------------| ------ | ----- |
-|           EOA             |        |       |
-|       Smart Contract      |        |       |
+|       criterias             | (onERC1155Received check) | Batch/Single |
+| ----------------------------| --------------------------| ------------ |
 
-The functions involved with the ERC1155
 
-1. safeTransferFrom
-2. safeBatchTransferFrom
-3. balanceOf
-4. balanceOfBatch
-5. setApprovalForAll
-6. isApprovedForAll
+## Test cases outline
 
-75  test cases
+0. Main functions
+    1. safeTransferFrom
+    2. safeBatchTransferFrom
+    3. balanceOf
+    4. balanceOfBatch
+    5. setApprovalForAll
+    6. isApprovedForAll
 
-ERC1155TokenReceiver check(/Normal/)
+1. **mint/ safeTransfer(including fuzzing)** 
+* Normal cases
+    1. Single/Batch
+    2. (onERC1155Received check) 
+* Expection cases                  
+    * ERC1155Recipient Expections
+        1. RevertingERC1155Recipient
+        2. NonERC1155Recipient
+        3. WrongReturnDataERC1155Recipient    
+    * To Zero Address  
+    * InsufficientBalance  
 
-ERC1155TokenReceiver(Reverting/WrongReturnData/NonERC155Recipient/)
+2. **burn(including fuzzing)**
+    *  Normal cases
+        1. Single/Batch
+    * Expection cases
+        1. InsufficientBalance
+        2. ArrayLengthMismatch
+3. **Balance(including fuzzing)**
+    * Normal cases
+        1. Single/Batch
+            DOING Singal not cover
+    * Expection cases
+        1. ArrayMismatch
+4. **Approve(including fuzzing)** 
+    1. testApproveAll
 
-EOA
+5. **Event Test(including fuzzing,exclude URI)** 
+    * related Events
+        1. event TransferSingle
+        2. event ApprovalForAll
+        3. event TransferBatch
+    * My test scenarios, more scenarios can be add, but I think the below cases have covert every corcner   
+        * testEventMintToEOA
+        * testEventMintToERC1155Recipient
+        * testEventBurn
+        * testEventSafeTransferFromToEOA
+        * testEventSafeTransferFromToERC1155Recipient
 
-**SINGLE 34**
+5. **URI Test** 
+    * testSetURI 
+    * testEmitURI when mint one token, emit this event
 
-current:  No arguments
+ 
+## Test Cases
+
+**SINGLE**
 
 **MINT 12**
 
@@ -62,7 +100,7 @@ current:  No arguments
 
 **Balance**  testApproveAll also covered?
 
-- [ ]  
+- [ ]  Most of other test cases have covered  balanceOf() function
 - [ ]  
 
 Approve testBatch also covered?
@@ -73,7 +111,6 @@ Approve testBatch also covered?
 
 - [✅]  testBatchMintToEOA (No arguments / Fuzzing test ) all done
 - [✅]  testBatchMintToERC1155Recipient (No arguments / Fuzzing test )
-- [ ]  
 
 - [✅]  testFailBatchMintToZero (No arguments / Fuzzing test )
 - [✅]  testFailBatchMintToNonERC1155Recipient  (No arguments / Fuzzing test )
@@ -102,7 +139,7 @@ Transfer16
 
 **Balance 4** 
 
-- [✅]  testBatchBalanceOf()  (No arguments / Fuzzing test )  ?? which covered signal situation?
+- [✅]  testBatchBalanceOf()  (No arguments / Fuzzing test )  
 
 - [✅]  testFailBalanceOfBatchWithArrayMismatch (No arguments / Fuzzing test )
 
@@ -110,17 +147,35 @@ Transfer16
 
 - [✅]  testApproveAll  (No arguments / Fuzzing test ) all done
 
-current 76(? need to check again all test cases) 
+**EVENT 10**
 
-(No arguments / Fuzzing test )   Fuzzing test  for fuzzing test
+- [✅]  testEventMintToEOA()   (No arguments / Fuzzing test ) 
+- [✅]  testEventMintToERC1155Recipient()   (No arguments / Fuzzing test ) 
+- [✅]  testEventBurn()   (No arguments / Fuzzing test ) 
+- [✅]  testEventSafeTransferFromToEOA()   (No arguments / Fuzzing test ) 
+- [✅]  testEventSafeTransferFromToERC1155Recipient()   (No arguments / Fuzzing test ) 
+ 
+**URI** 4
+- [✅]  testSetURI()   (No arguments / Fuzzing test ) 
+- [✅]  testEmitURI()   (No arguments / Fuzzing test )  event test, when mint one token, emit the event
 
-**EVENT**
 
-URI
+94 test case
 
-testEmitURI
+* Burn 10 event 2 ok
+* mint 26 event 5 ok
+* Transfer 34 event 7
+* Balance 4 ok
+* Approve 2
+* URI 4
 
-questions
 
-- no balanceOf test
-- 
+
+## quesitons
+1. The test cases's numbers seems very huge. Are there some tools can manage that?
+
+
+## Others
+1. Customer error can see  testFailSafeBatchTransferFromToZero
+
+
