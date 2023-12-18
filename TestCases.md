@@ -63,8 +63,7 @@
 
 5. **URI Test** 
     * testSetURI 
-    * testEmitURI when mint one token, emit this event
-
+    * testEmitURI when update one token's URT, emit the URI
  
 ## Test Cases
 
@@ -101,7 +100,6 @@
 **Balance**  testApproveAll also covered?
 
 - [ ]  Most of other test cases have covered  balanceOf() function
-- [ ]  
 
 Approve testBatch also covered?
 
@@ -169,6 +167,7 @@ Transfer16
 * Approve 2
 * URI 4
 
+12+26+5+41+10
 
 
 ## quesitons

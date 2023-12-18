@@ -30,6 +30,7 @@ interface ERC1155_YUI {
     function setApprovalForAll(address _operator, bool _approved) external;
     function isApprovedForAll(address _owner, address _operator) external view returns (bool);
 
+    
   
 }
 
@@ -87,7 +88,7 @@ contract ERC1155Recipient is ERC1155TokenReceiver {
     }
 }
 
-contract ERC1155_YUITest is DSTestPlus {
+contract ERC1155_EVENT_YUI is DSTestPlus {
 
     YulDeployer yulDeployer = new YulDeployer();
 

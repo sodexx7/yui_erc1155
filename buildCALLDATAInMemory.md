@@ -14,14 +14,14 @@
 
 * array's length = data_length+0x20(length_pos)
 
-* code implementation [CopyArrayToMemory](https://github.com/sodexx7/yui_erc1155/blob/b30acfcb2b83749b2f6f360c39443f99eafaecbd/yul/ERC1155_YUI.yul#L291)
+* code implementation [CopyArrayToMemory](https://github.com/sodexx7/yui_erc1155/blob/0a924a78cf1f87f43b5645fa19f200fc31d16cd0/yul/ERC1155_YUI.yul#L340)
 
 
 ### How to get the bytes's length in calldata?
 
 * Because bytes's data is tightly encode, Calculate its length based on my code formula. Notice: when bytes is empty, no length value.
 
-* [bytes's length code implementation](https://github.com/sodexx7/yui_erc1155/blob/b30acfcb2b83749b2f6f360c39443f99eafaecbd/yul/ERC1155_YUI.yul#L326)
+* [bytes's length code implementation](https://github.com/sodexx7/yui_erc1155/blob/0a924a78cf1f87f43b5645fa19f200fc31d16cd0/yul/ERC1155_YUI.yul#L359)
 
 
 **related test case: [testBatchMintToERC1155Recipient()](https://github.com/sodexx7/yui_erc1155/blob/b30acfcb2b83749b2f6f360c39443f99eafaecbd/test/ERC1155_YUI.t.sol#L386) The below ara the test case's data**
@@ -75,7 +75,7 @@
 ```
 
 ## Actual data as below 
-* related test case [testBatchMintToERC1155Recipient()](https://github.com/sodexx7/yui_erc1155/blob/b30acfcb2b83749b2f6f360c39443f99eafaecbd/test/ERC1155_YUI.t.sol#L386)
+* related test case [testBatchMintToERC1155Recipient()](https://github.com/sodexx7/yui_erc1155/blob/0a924a78cf1f87f43b5645fa19f200fc31d16cd0/test/ERC1155_YUI.t.sol#L625)
 * The below data will as the Call data when calling the onERC1155BatchReceived() on the to address. 
 * So the below layout obey the EVM calldata conversations.
 
@@ -117,7 +117,7 @@
 2. Following the array's length, store all array's  value. 
 
 
-[related code implementation-buildCalldataInMem](https://github.com/sodexx7/yui_erc1155/blob/b30acfcb2b83749b2f6f360c39443f99eafaecbd/yul/ERC1155_YUI.yul#L238)
+[related code implementation-buildCalldataInMem](https://github.com/sodexx7/yui_erc1155/blob/0a924a78cf1f87f43b5645fa19f200fc31d16cd0/yul/ERC1155_YUI.yul#L288)
 
 
 

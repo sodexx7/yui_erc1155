@@ -55,12 +55,21 @@ object "ERC1155_YUI" {
         }
         case 0x02fe5305 /*setURI(string)*/ { 
 
-          setURI(0)
+          setURI(URISlot(),decodeAsStringOrBytes(0))
           returnTrue()
         }
         case 0x7754305c /*getURI()*/ { 
           
           getURI()
+          returnTrue()
+        }
+        case 0xf41a9f2a /*updateURIWithTokenId(uint256,string)*/ { 
+
+          let id := decodeAsUint(0)
+          let slotPos := tokenURIStorageOffset(id)
+
+          setURI(slotPos,decodeAsStringOrBytes(1))
+          emitURI(slotPos,id)
           returnTrue()
         }
         // no functions match, just revert
@@ -190,59 +199,59 @@ object "ERC1155_YUI" {
         }
 
         function updateBalance(from,to,ids_length_pos,values_length_pos,isBatch) {
-        switch isBatch
-        case "BATCH" {
-          let ids_length := calldataload(add(4,ids_length_pos))
-       
-          // let values_length_pos := calldataload(add(4, mul(valuesPos, 0x20)))
-          let values_length := calldataload(add(4,values_length_pos))
+          switch isBatch
+          case "BATCH" {
+            let ids_length := calldataload(add(4,ids_length_pos))
+        
+            // let values_length_pos := calldataload(add(4, mul(valuesPos, 0x20)))
+            let values_length := calldataload(add(4,values_length_pos))
 
-          revertIfArrayLenNoEqual(ids_length,values_length)
-          // require(ids_length) // ids_length should gt 0 TODO add custom error this related the param type check
+            revertIfArrayLenNoEqual(ids_length,values_length)
+            // require(ids_length) // ids_length should gt 0 TODO add custom error this related the param type check
 
-          // TODO when ids length !== values length ,should get the min length, the id's length == values length openzepplin no this requirement?
-          // For THE EIP1155 no these requirements
-          let i := 0
-          for {} lt(i,ids_length) {i := add(i, 1)} {
+            // TODO when ids length !== values length ,should get the min length, the id's length == values length openzepplin no this requirement?
+            // For THE EIP1155 no these requirements
+            let i := 0
+            for {} lt(i,ids_length) {i := add(i, 1)} {
 
-              // 0x24 should add the 0x04(function singature)
-              let id := calldataload(add(add(ids_length_pos,0x24),mul(i,0x20)))
-              let value := calldataload(add(add(values_length_pos,0x24),mul(i,0x20)))
+                // 0x24 should add the 0x04(function singature)
+                let id := calldataload(add(add(ids_length_pos,0x24),mul(i,0x20)))
+                let value := calldataload(add(add(values_length_pos,0x24),mul(i,0x20)))
 
+                // one decrease value, one increase value
+                if iszero(iszero(from)) {
+                  
+                  deductFromBalanceWithId(from,id,value)
+                }
+
+                if iszero(iszero(to)) {
+
+                  // todo check overflow check
+                  addToBalanceWithId(to,id,value)
+                }
+            }
+            emitTransferBatch(caller(),from,to,ids_length_pos,values_length_pos)
+            
+          }  
+          case "SINGAL" { 
+            // SINGAL just means the id or value
+            let id :=    ids_length_pos
+            let value := values_length_pos
+            // iszero(!0) =>0 =>iszero(0)=1 
+            if iszero(iszero(from)) {
               // one decrease value, one increase value
-              if iszero(iszero(from)) {
-                
-                deductFromBalanceWithId(from,id,value)
-              }
+              // TODO check sufficient value/ overflow check
+              deductFromBalanceWithId(from,id,value)
+            }
 
-              if iszero(iszero(to)) {
-
-                // todo check overflow check
-                addToBalanceWithId(to,id,value)
-              }
+            if iszero(iszero(to)) {
+              // todo check overflow check
+              addToBalanceWithId(to,id,value)
+            }
+            
+            emitTransferSingle(caller(),from,to,id,value)
+            // emitURI(URISlot(),id)
           }
-           emitTransferBatch(caller(),from,to,ids_length_pos,values_length_pos)
-           
-        }  
-        case "SINGAL" { 
-          // SINGAL just means the id or value
-          let id :=    ids_length_pos
-          let value := values_length_pos
-          // iszero(!0) =>0 =>iszero(0)=1 
-          if iszero(iszero(from)) {
-            // one decrease value, one increase value
-            // TODO check sufficient value/ overflow check
-            deductFromBalanceWithId(from,id,value)
-          }
-
-          if iszero(iszero(to)) {
-            // todo check overflow check
-            addToBalanceWithId(to,id,value)
-          }
-          
-          emitTransferSingle(caller(),from,to,id,value)
-          emitURI(URISlot(),id)
-        }
         }
 
   ///////////////////////////////////////////////////////////////////////////Memory Operation/////////////////////////////////////////////////////////////////////////
@@ -378,6 +387,8 @@ object "ERC1155_YUI" {
 
         function URISlot() -> p { p := 2 }
 
+        function tokenURISlot() -> p { p := 3 }
+
         //This implementation is samke like solidity how to manipulate the nested mapping keccak256(account,keccak256(id,slot)) 
         function balanceWithIdStorageOffset(id, account) -> offset {
            
@@ -394,6 +405,14 @@ object "ERC1155_YUI" {
             mstore(0x20, operator)
             offset := keccak256(0, 0x40)
         }
+
+        function tokenURIStorageOffset(id) -> offset {
+           
+          mstore(0, id)
+          mstore(0x20, tokenURISlot())
+          offset := keccak256(0, 0x40)
+       }
+
 
         function addToBalanceWithId(account,id,amount) {
           let offset := balanceWithIdStorageOffset(id,account)
@@ -412,11 +431,9 @@ object "ERC1155_YUI" {
 
         // reference: https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html#bytes-and-string length means bytes
         // TODO not check the ends
-        function setURI(URIOffset){
+        function setURI(slotPos,URI_length_pos){
 
-           let URI_pos := add(4, mul(0x20, URIOffset)) 
-           let URI_length_pos := calldataload(URI_pos)
-           let URI_length := calldataload(add(4,URI_length_pos)) 
+          let URI_length := calldataload(add(4,URI_length_pos)) 
 
            // length <0x20, store  length*2; length >= 0x20, store length*2+1
            switch lt(URI_length,0x20) 
@@ -424,13 +441,14 @@ object "ERC1155_YUI" {
 
                 let actualData := calldataload(add(URI_length_pos,0x24))
                 // the lowest-order byte stores(31th bytes) the length 
-                sstore(URISlot(),or(actualData,mul(URI_length,2))) //  V or  00 = V 
+                sstore(slotPos,or(actualData,mul(URI_length,2))) //  V or  00 = V 
+                
             }
             case 0 { // URI_length >= 0x20
-                sstore(URISlot(),add(mul(URI_length,2),1)) // according to evm how to store string, when length>=31bytes, store lengh in the corrospending's slot
+                sstore(slotPos,add(mul(URI_length,2),1)) // according to evm how to store string, when length>=31bytes, store lengh in the corrospending's slot
                 
                 // calculate the first value's postion
-                mstore(0,URISlot())
+                mstore(0,slotPos)
                 let firstPos := keccak256(0, 0x20) 
 
                 // calculate how many slots needed? last round should right most
@@ -450,9 +468,10 @@ object "ERC1155_YUI" {
                   sstore(add(firstPos,rounds),lastData)
                 }
             }
+
         }
 
-        function getURI(){
+       function getURI(){
         let urlData := sload(URISlot())
         // get the last bytes value, calculating the length
         let length := and(urlData,0x00000000000000000000000000000000000000000000000000000000000000ff)
@@ -490,7 +509,7 @@ object "ERC1155_YUI" {
 
             return(0,add(0x40,actualLen))
           }
-        }
+       }
 
   ///////////////////////////////////////////////////////////////////////////storage access/////////////////////////////////////////////////////////////////////////
 
@@ -637,7 +656,8 @@ object "ERC1155_YUI" {
 
       // reference: https://docs.soliditylang.org/en/latest/yul.html#literals ,https://eips.ethereum.org/EIPS/eip-1155#metadata 
       // URI(string,uint256) 0x6bb7ff708619ba0610cba295a58592e0451dee2622938c8755667688daf3529b
-      function emitURI(URISlotVal,id) {
+      // No use
+      function emitURIWithId(URISlotVal,id) {
         let signatureHash := 0x6bb7ff708619ba0610cba295a58592e0451dee2622938c8755667688daf3529b
 
         let urlData := sload(URISlotVal)
@@ -703,8 +723,59 @@ object "ERC1155_YUI" {
             log2(0, add(idEndPos,5), signatureHash,id)  
           }
       }
+
+      function emitURI(URISlotVal,id) {
+        let signatureHash := 0x6bb7ff708619ba0610cba295a58592e0451dee2622938c8755667688daf3529b
+
+        let urlData := sload(URISlotVal)
+        let length := and(urlData,0x00000000000000000000000000000000000000000000000000000000000000ff)
+
+        switch lte(length,0x3e)
+          case 1 {
+            mstore(0,0x0000000000000000000000000000000000000000000000000000000000000020)
+
+            let urlActualData :=  and(urlData,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00)
+            let actualLen := div(length,2)
+
+            mstore(0x20,actualLen)
+
+            // mstore prefixURIData,id(hex)
+            mstore(0x40,urlActualData)
+            
+            log2(0, add(0x40,0x20), signatureHash,id) 
+
+          }
+          case 0 { // length > 31bytes * 2
+
+            mstore(0,URISlotVal)
+            let firstPos := keccak256(0, 0x20) 
+
+            mstore(0,0x0000000000000000000000000000000000000000000000000000000000000020)
+            
+            let actualLen := div(sub(length,1),2)
+
+            mstore(0x20,actualLen) 
+
+            // mstore prefixURIData
+            let rounds := div(actualLen,0x20)
+            let i := 0 
+            for {} lt(i,rounds) {i := add(i, 1)} {
+              mstore(add(0x40,mul(i,0x20)),sload(add(firstPos,i)))  
+            }
+
+            let modSize := mod(actualLen,0x20)
+            if gt(modSize,0) {
+              mstore(add(0x40,mul(i,0x20)),sload(add(firstPos,rounds)))
+              i := add(i,1)
+            }
+
+            log2(0, add(0x40,mul(i,0x20)), signatureHash,id)  
+          }
+      }
   
   ///////////////////////////////////////////////////////////////////////////URI operation///////////////////////////////////////////////////////////////
+        //  getActualHex(),fullHexOfZeroInMem(),hexOfNumToMem(),getDataByRange() No use, which was called by emitURIWithId()
+  
         // the num between [0,9] or [a,f], return its ASCII code
         // https://www.asciitable.com/
         // todo check the num range

@@ -6,10 +6,8 @@ import "forge-std/Test.sol";
 import "./lib/YulDeployer.sol";
 import "./tokens/ERC1155TokenReceiver.sol";
 
-// todo basic funtions
+// reference: https://eips.ethereum.org/EIPS/eip-1155#safe-transfer-rules
 interface ERC1155_YUI {
-    // The first funtion should check
-    // function safeTransferFrom(address _from, address _to, uint256 _id, uint256 _value, bytes calldata _data) external; confirm the function is right?
 
     function mint(address _to, uint256 _id, uint256 _value, bytes calldata _data) external;
     function burn(address from, uint256 _id, uint256 _value) external;
@@ -44,8 +42,7 @@ interface ERC1155_YUI {
      * URI(string _value, uint256 indexed _id);
      */
 
-    function setURI(string memory URI) external;
-    function getURI() external returns (string memory);
+    
 }
 
 // different situations involved with ERC1155TokenReceiver  Normal/Revert/WrongReturnData/NonERC1155Recipient
@@ -152,7 +149,6 @@ contract ERC1155_YUITest is DSTestPlus {
 
     ERC1155_YUI token;
 
-    // todo
     mapping(address => mapping(uint256 => uint256)) public userMintAmounts;
     mapping(address => mapping(uint256 => uint256)) public userTransferOrBurnAmounts;
 
@@ -164,173 +160,7 @@ contract ERC1155_YUITest is DSTestPlus {
         address indexed _operator, address indexed _from, address indexed _to, uint256 _id, uint256 _value
     );
 
-    // DOING  test Decimal into hex
-    event URI(string _value, uint256 indexed _id);
-
-    function testEmitURI() public {
-        // Doing test string "0"
-        // string memory url = "000000000000000000000000000000000000000000001d7c"; // <0x20
-        // console.log(bytes(url).length);
-
-        // string memory url = "https://cdn-domain/"; // <0x20
-        // string memory url = "https://abcdn-domain/"; // >=0x20 30bytes
-        string memory url = "https://aaaabcdn-domain/"; // >=0x20 31bytes
-        // string memory url = "https://aassdxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxaabcdn-domain/"; // >=0x20 32bytes
-
-        string memory suffixURI = "{id}.json";
-        string memory originalFullURI = string.concat(url, suffixURI);
-
-        token.setURI(originalFullURI);
-        // token.getURI();
-        console.log(token.getURI());
-        // console.log(bytes(originalFullURI).length);
-
-        string memory checkURIwithId = string.concat(url, toHexString(uint256(314592), 32), ".json");
-
-        hevm.expectEmit(true, true, true, true);
-        emit TransferSingle(address(this), address(0), address(0xBEEF), 314592, 1);
-
-        emit URI(checkURIwithId, 314592);
-        token.mint(address(0xBEEF), 314592, 1, "");
-    }
-
-    // how to limit the string range
-    function testEmitURI(
-        // uint256 url_id,
-        string memory url,
-        address to,
-        uint256 id,
-        uint256 amount,
-        bytes memory mintData
-    ) public {
-        // uint256 length = bound(url_id, 0, 32);// the length between 0 and   28
-        // string memory url = toHexString(url_id,length);
-        console.log(url);
-        string memory suffixURI = "{id}.json";
-        string memory originalFullURI = string.concat(url, suffixURI);
-
-        console.log(originalFullURI);
-        token.setURI(originalFullURI);
-        console.log(token.getURI());
-        string memory checkURIwithId = string.concat(url,toHexString(uint256(id),32),".json");
-
-        if (to == address(0)) to = address(0xBEEF);
-        if (uint256(uint160(to)) <= 18 || to.code.length > 0) return;
-
-        hevm.expectEmit(true,true,true,true);
-        emit TransferSingle(address(this),address(0),to,id,amount);
-        emit URI(checkURIwithId, id);
-        token.mint(to, id, amount, mintData);
-    }
-
-    /**
-     * @dev Converts a `uint256` to its ASCII `string` hexadecimal representation with fixed length.
-     */
-    //  reference: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/932fddf69a699a9a80fd2396fd1a2ab91cdda123/contracts/utils/Strings.sol#L65 ignore 0x
-    bytes16 private constant HEX_DIGITS = "0123456789abcdef";
-
-    function toHexString(uint256 value, uint256 length) internal pure returns (string memory) {
-        uint256 localValue = value;
-        bytes memory buffer = new bytes(2 * length);
-        for (uint256 i = 2 * length + 1; i > 1; --i) {
-            buffer[i - 2] = HEX_DIGITS[localValue & 0xf];
-            localValue >>= 4;
-        }
-
-        return string(buffer);
-    }
-
-    // DOING by slot get url???
-    // DOING test all situaitons and compete the get url??? functions
-    // todo, URI should do regrex check
-    // id combine URI
-    function testSetURI() public {
-        // when len(URI) <0x20
-        // string memory url = "https://cdn-domain/{id}.json"; // <0x20
-        // string memory url = "https://abcdn-domain/{id}.json"; // >=0x20 30bytes
-        // string memory url = "https://aabcdn-domain/{id}.json"; // >=0x20 31bytes  take  1hex as 1 bytes
-        // string memory url = "https://aaabcdn-domain/{id}.json"; // >=0x20 32bytes   TODO check when 1 hex == 1 bytes??
-        string memory url = "https://aaabcdn-domain/{id}.jsonhttps://aaabcdn-domain/{id}.json"; // >=0x20 32bytes   TODO check when 1 hex == 1 bytes??
-
-        uint256 test = bytes("{id}.json").length;
-        console.log("test", test);
-
-        token.setURI(url);
-        // reference: https://docs.soliditylang.org/en/latest/types.html#bytes-and-string-as-arrays
-        uint256 len = bytes(url).length;
-        console.log("len", len);
-        if (len < 31) {
-            // when len(URI) >= 0x20
-            console.log("slot key:2");
-            console.log("slot value");
-            console.logBytes32(hevm.load(address(token), bytes32(uint256(2)))); // pos slot store the length
-        } else {
-            console.log("slot pos value");
-            console.logBytes32(hevm.load(address(token), bytes32(uint256(2))));
-
-            uint256 rounds = len / 32;
-            bytes32 firstPos = keccak256(abi.encode(bytes32(uint256(2))));
-
-            for (uint256 i = 0; i < rounds; i++) {
-                console.log("the ", i, "th key");
-                console.logBytes32(bytes32(uint256(firstPos) + i));
-                console.log("the ", i, "th value");
-                console.logBytes32(hevm.load(address(token), bytes32(uint256(firstPos) + i)));
-            }
-
-            uint256 modSize = len % 32;
-            if (modSize > 0) {
-                console.log("the ", rounds, "th key");
-                console.logBytes32(bytes32(uint256(firstPos) + rounds));
-                console.log("the ", rounds, "th value");
-                console.logBytes32(hevm.load(address(token), bytes32(uint256(firstPos) + rounds)));
-            }
-        }
-
-        string memory URIresult = token.getURI();
-        console.log(URIresult);
-        // assertEq(url,URIresult);
-    }
-
-    // specifical string url how to limit the string arrange???
-    function testSetURI(string memory url) public {
-
-        token.setURI(url);
-        // reference: https://docs.soliditylang.org/en/latest/types.html#bytes-and-string-as-arrays
-        uint len = bytes(url).length;
-        if(len < 31){
-          // when len(URI) >= 0x20
-             console.log("slot key:2");
-             console.log("slot value");
-            console.logBytes32(hevm.load(address(token),bytes32(uint(2)))); // pos slot store the length
-        } else {
-            console.log("slot pos value");
-            console.logBytes32(hevm.load(address(token),bytes32(uint(2))));
-
-            uint rounds = len/32;
-            bytes32 firstPos = keccak256(abi.encode(bytes32(uint(2))));
-
-            for(uint i =0;i< rounds;i++){
-                console.log("the ",i,"th key");
-                console.logBytes32(bytes32(uint(firstPos)+i));
-                console.log("the ",i,"th value");
-                console.logBytes32(hevm.load(address(token),bytes32(uint(firstPos)+i)));
-            }
-
-            uint modSize = len%32;
-            if(modSize > 0 ){
-                console.log("the ",rounds,"th key");
-                console.logBytes32(bytes32(uint(firstPos)+rounds));
-                console.log("the ",rounds,"th value");
-                console.logBytes32(hevm.load(address(token),bytes32(uint(firstPos)+rounds)));
-            }
-        }
-
-        string memory URIresult = token.getURI();
-        // console.log(URIresult);
-        assertEq(url,URIresult);
-
-    }
+   
 
     /**
      * SINGLE ***************************************************************************
@@ -338,21 +168,7 @@ contract ERC1155_YUITest is DSTestPlus {
 
     /////////////////////////////////////////////////////////////////////////// MINT /////////////////////////////////////////////////////////////////////////////
 
-    // DOING faliure situations check
-    /**
-     * doing
-     * 
-     *     2 metatask ids how to dealwith. 
-     *         https://eips.ethereum.org/EIPS/eip-1155#erc-1155-metadata-uri-json-schema
-     *     3 familar with YUI. Udemy Course
-     * 
-     * 
-     * todo
-     * 1) more test cases arrange
-     * 2) basci Yui functions done
-     */
-    // tesing call
-    function testMintToEOA() public {
+     function testMintToEOA() public {
         token.mint(address(0xBEEF), 1337, 1, "");
 
         assertEq(token.balanceOf(address(0xBEEF), 1337), 1);
@@ -845,7 +661,6 @@ contract ERC1155_YUITest is DSTestPlus {
         token.batchMint(address(0), ids, mintAmounts, "");
     }
 
-    // TODO bound function check
     function testFailBatchMintToZero(uint256[] memory ids, uint256[] memory amounts, bytes memory mintData) public {
         uint256 minLength = min2(ids.length, amounts.length);
 
@@ -1976,152 +1791,4 @@ contract ERC1155_YUITest is DSTestPlus {
 
         token.balanceOfBatch(tos, ids);
     }
-
-    
-
-    // todo
-
-    // doing orginazing the test cases actually test functions
-
-    /**
-     * how to make the init balance
-     *     test cases list
-     */
-    //
-    // doing
-    //  _mint(to, id, amount, data);
-
-    // test funtions
-    /**
-     * 1) create the contract.
-     *         What's the init balance? how to deal with it? in the constructor.
-     * 
-     * 2) mint/burn
-     *     at least some balance?
-     * 
-     * 
-     * 3)
-     */
-
-    /**
-     * // todo
-     * DOING: mint，burn/(single/Batch)
-     *        
-     *      1)  different test categarios list almost/  Safe  Rules or scenarios check  done
-     *      2)  metadata check ,how to generate  id ? 
-     * 
-     *         organize test cases more cleanly
-     * 
-     *          mint and burn check
-     *           test tools funtions to dig? max3? bond?
-     * 
-     * 
-     * 
-     *  
-     * 1: test funtions 
-     *     1) reference: ERC1155.t.sol
-     *     2) prepare 
-     *         1: how to mint?
-     * 
-     *         mint/burn(burn/destroy operations are specialized transfers)
-     *         
-     *         create: from:0x00 // burn: to:0x00
-     *         values? how to set token? Ids????
-     * 
-     * 
-     *         the init balance?
-     *             mint burn
-     * 
-     *         Minting/creating and burning/destroying rules:
-     * 
-     *             TransferSingle
-     *                 1) 
-     *                 To broadcast the existence of a token ID with no initial balance, the contract SHOULD emit the TransferSingle event from 0x0 to 0x0, with the token creator as _operator, and a _value of 0.    
-     * 
-     * 
-     *             event TransferSingle(address indexed _operator, address indexed _from, address indexed _to, uint256 _id, uint256 _value);
-     * 
-     * 
-     *         the related events:
-     *             event TransferSingle(address indexed _operator, address indexed _from, address indexed _to, uint256 _id, uint256 _value);
-     *             event TransferBatch(address indexed _operator, address indexed _from, address indexed _to, uint256[] _ids, uint256[] _values);
-     * 
-     *              minting/creating tokens: the `_from` argument MUST be set to `0x0`
-     *              burning/destroying tokens, the `_to` argument MUST be set to `0x0`
-     * 
-     *         how to set the uri?
-     * 
-     *     3) core test funtions
-     *         mint/burn(burn/destroy operations are specialized transfers)
-     * 
-     * 
-     * 
-     *         safeTransferFrom
-     *         safeBatchTransferFrom
-     *         balanceOf
-     *         balanceOfBatch
-     *         setApprovalForAll
-     *         isApprovedForAll
-     * 
-     *         faliue scenarios test
-     * 
-     *         all different types of falure scenarios  TODO
-     *         according to the rules, list all the possible test funtion types.
-     *         https://eips.ethereum.org/EIPS/eip-1155#safe-transfer-rules
-     * 
-     * 
-     * 
-     * 
-     *         event:
-     *             TransferSingle
-     *             TransferBatch
-     *             ApprovalForAll
-     *             URI
-     *     4) some notices
-     *         1) batch mint/transfer vs signel mint or transfer
-     *         2) balance check
-     *         3) how to calculate the circulating supply?
-     *                 The total value transferred from address 0x0 minus the total value transferred to 0x0 observed via the TransferSingle and TransferBatch events MAY be used by clients and exchanges to determine the “circulating supply” for a given token ID.
-     *                 (Minting/creating and burning/destroying rules)
-     *             
-     *         4) test to EOA/ Smart contract. Smart contract foucus on the Scenarios(https://eips.ethereum.org/EIPS/eip-1155)
-     *         5) testMintToERC1155Recipient
-     *             the blew params:
-     *             address public operator;
-     *             address public from;
-     *             uint256 public id;
-     *             uint256 public amount;
-     *             bytes public mintData;
-     * 
-     *         6) how to test only NFT721 OR erc20
-     * 
-     *     5) diffcult
-     * 
-     *         testBatchMintToEOA(test/ERC1155.t.sol)
-     *             1)operate array in memory
-     *             2) 
-     * 
-     *     6) ERC1155TokenReceiver also implement? By Yui
-     *         solidity abstact how to implement by the YUI language?
-     */
 }
-
-/**
- * todo
- *  1) interface basic funtions 
- *  
- *  2)
- *  ``` when emit the below events?
- * 
- * - [ ]  **`event** TransferSingle(**address** **indexed** _operator, **address** **indexed** _from, **address** **indexed** _to, **uint256** _id, **uint256** _value);`
- * - [ ]  **`event** TransferBatch(**address** **indexed** _operator, **address** **indexed** _from, **address** **indexed** _to, **uint256**[] _ids, **uint256**[] _values);`
- * - [ ]  **`event** ApprovalForAll(**address** **indexed** _owner, **address** **indexed** _operator, **bool** _approved);`
- * - [ ]  **`event** URI(**string** _value, **uint256** **indexed** _id);`
- *  
- *  ```
- * 
- *  3) doing 
- *     test cases summary, especially for the failure types. doing
- * 
- *     todo: init mint/burn
- */
