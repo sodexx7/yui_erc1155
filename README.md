@@ -37,7 +37,7 @@ The repo implementats [EIP1155](https://eips.ethereum.org/EIPS/eip-1155) by pure
     * [BUILD CALLDATA IN MEMORY](buildCALLDATAInMemory.md)
 
 2. How to store string,extract string,manage string in slot or memory.
-    * [MBINE URI(string) IN YUL](URIOperation.md)
+    * [COMBINE URI(string) IN YUL](URIOperation.md)
 
 
 ## Some tips
