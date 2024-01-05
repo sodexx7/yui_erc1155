@@ -129,7 +129,7 @@ Transfer16
 - [✅]  testSafeBatchTransferFromToERC1155Recipient (No arguments / Fuzzing test )  event done
 
 - [✅]  testFailSafeBatchTransferInsufficientBalance (No arguments / Fuzzing test )
-- [✅]  testFailSafeBatchTransferFromToZero(No arguments / Fuzzing test )
+- [✅]  testSafeBatchTransferFromToZero(No arguments / Fuzzing test )
 - [✅]  testFailSafeBatchTransferFromToNonERC1155Recipient (No arguments / Fuzzing test )
 - [✅]  testFailSafeBatchTransferFromToRevertingERC1155Recipient (No arguments / Fuzzing test )
 - [✅]  testFailSafeBatchTransferFromToWrongReturnDataERC1155Recipient (No arguments / Fuzzing test )
@@ -178,3 +178,5 @@ Transfer16
 1. Customer error can see  testFailSafeBatchTransferFromToZero
 
 
+* add new test case(test if set false for approve)
+testSafeTransferFromToEOAForApproveFalse

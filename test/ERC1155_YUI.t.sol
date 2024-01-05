@@ -956,7 +956,7 @@ contract ERC1155_YUITest is DSTestPlus {
 
 
     error ZeroAddress();
-    function testFailSafeBatchTransferFromToZero() public {
+    function testSafeBatchTransferFromToZero() public {
         address from = address(0xABCD);
 
         uint256[] memory ids = new uint256[](5);
@@ -984,12 +984,12 @@ contract ERC1155_YUITest is DSTestPlus {
 
         hevm.prank(from);
         token.setApprovalForAll(address(this), true);
-        // hevm.expectRevert(ZeroAddress.selector);
-        hevm.expectRevert(bytes("ZeroAddress()"));
+        hevm.expectRevert(ZeroAddress.selector);
+        // hevm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
         token.safeBatchTransferFrom(from, address(0), ids, transferAmounts, "");
     }
 
-    function testFailSafeBatchTransferFromToZero(
+    function testSafeBatchTransferFromToZero(
         uint256[] memory ids,
         uint256[] memory mintAmounts,
         uint256[] memory transferAmounts,
@@ -1023,7 +1023,7 @@ contract ERC1155_YUITest is DSTestPlus {
 
         hevm.prank(from);
         token.setApprovalForAll(address(this), true);
-
+        hevm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
         token.safeBatchTransferFrom(from, address(0), normalizedIds, normalizedTransferAmounts, transferData);
     }
 
@@ -1791,4 +1791,19 @@ contract ERC1155_YUITest is DSTestPlus {
 
         token.balanceOfBatch(tos, ids);
     }
+
+    error callerNotApproved();
+    function testSafeTransferFromToEOAForApproveFalse() public {
+        address from = address(0xABCD);
+
+        token.mint(from, 1337, 100, "");
+
+        hevm.prank(from);
+        token.setApprovalForAll(address(this), false);
+        hevm.expectRevert(abi.encodeWithSignature("callerNotApproved()"));
+        token.safeTransferFrom(from, address(0xBEEF), 1337, 70, "");
+
+       
+    }
+    
 }

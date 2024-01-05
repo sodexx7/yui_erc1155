@@ -87,17 +87,19 @@ object "ERC1155_YUI" {
         }
 
         function burn(from,id,value) {
-          // TODO, should check the rights
           updateBalance(from,0,id,value,"SINGAL")
         }
         
         function batchBurn(from,idsPos,valuesPos) {
-          // TODO, should check the rights
           updateBalance(from,0,idsPos,valuesPos,"BATCH")
         }
 
         function safeTransferFrom(from,to,id,value,bytesPos) {
-
+          // permission check
+          if iszero(iszero(from)){
+            permissionCheck(from)
+          }
+          
           revertIfZeroAddress(to) // TODO show more customer_error
           updateBalance(from,to,id,value,"SINGAL")
 
@@ -110,6 +112,10 @@ object "ERC1155_YUI" {
         }
 
         function safeBatchTransferFrom(from,to,idsPos,valuesPos,bytesPos) {
+          // permission check
+          if iszero(iszero(from)){
+            permissionCheck(from)
+          }
 
           revertIfZeroAddress(to) // TODO show more customer_error
           updateBalance(from,to,idsPos,valuesPos,"BATCH")
@@ -144,6 +150,15 @@ object "ERC1155_YUI" {
           mstore(0,0x20)
           mstore(0x20,addresses_length)
           return(0,add(0x40,mul(addresses_length,0x20)))
+        }
+
+        // owner check: if caller not the owner(from) , check the caller is approved 
+        function permissionCheck(owner){
+          if iszero(eq(caller(),owner)){
+            if iszero(isApprovedForAll(owner,caller())) {
+                revertIfNotApproved()
+            }
+          }
         }
 
         function callOnERC1155Received(operator,from,to,id,value,bytesPos){
@@ -191,9 +206,8 @@ object "ERC1155_YUI" {
         }
 
         function setApprovalForAll(operator,isApproved) {
-          // caller???  TODO check the caller is the owner??
           let offset := operatorApprovalStorageOffset(caller(),operator)
-          sstore(offset, safeAdd(sload(offset), isApproved))
+          sstore(offset, isApproved)
           emitApprovalForAll(caller(),operator,isApproved)
 
         }
@@ -382,7 +396,7 @@ object "ERC1155_YUI" {
   ///////////////////////////////////////////////////////////////////////////storage layout/////////////////////////////////////////////////////////////////////////
         // should the check the implementation maybe has some conflict?
         function balancesSlot() -> p { p := 0 }
-        // todo the below is not used CHECK
+
         function operatorApprovalsSlot() -> p { p := 1 }
 
         function URISlot() -> p { p := 2 }
@@ -402,7 +416,10 @@ object "ERC1155_YUI" {
 
         function operatorApprovalStorageOffset(account, operator) -> offset {
             mstore(0, account)
-            mstore(0x20, operator)
+            mstore(0x20, operatorApprovalsSlot())
+
+            mstore(0x20,keccak256(0, 0x40)) 
+            mstore(0, operator)
             offset := keccak256(0, 0x40)
         }
 
@@ -544,6 +561,13 @@ object "ERC1155_YUI" {
             mstore(0,keccak256(0, datasize("zeroAddress")))
             revert(0, 0x4)
            }
+        }
+
+        function revertIfNotApproved() {
+          
+          datacopy(0, dataoffset("callerNotApproved"), datasize("callerNotApproved"))
+          mstore(0,keccak256(0, datasize("callerNotApproved")))
+          revert(0, 0x4)
         }
 
         // todo add custom_error
@@ -851,7 +875,7 @@ object "ERC1155_YUI" {
   data "onERC1155Received" "onERC1155Received(address,address,uint256,uint256,bytes)"
   data "onERC1155BatchReceived" "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"
   data "zeroAddress" "ZeroAddress()"
-
+  data "callerNotApproved" "callerNotApproved()"
 
   }
 }
